@@ -35,7 +35,7 @@ rm -f ~/.local/bin/htm; rm -rf "$XDG_RUNTIME_DIR/htm"
 ```
 
 ## For agents
-Opt-in only. [docs/agent-instructions.md](docs/agent-instructions.md) is a block to paste into AGENTS.md / CLAUDE.md, and [docs/skill/ask-me-while-testing/SKILL.md](docs/skill/ask-me-while-testing/SKILL.md) is a Claude Code skill (copy to `~/.claude/skills/ask-me-while-testing/`). No root AGENTS.md/CLAUDE.md on purpose (the marketplace rejects them).
+Opt-in only. One command sets it up: `bin/htm-install-agent all ~/.claude/CLAUDE.md` (skill + instructions block + guard), or pick parts: `skill`, `block FILE`, `guard`; undo the guard with `guard-remove`; `status` shows what is on. Manual route: [docs/agent-instructions.md](docs/agent-instructions.md) is a block to paste into AGENTS.md / CLAUDE.md, and [docs/skill/ask-me-while-testing/SKILL.md](docs/skill/ask-me-while-testing/SKILL.md) is a Claude Code skill (copy to `~/.claude/skills/ask-me-while-testing/`). No root AGENTS.md/CLAUDE.md on purpose (the marketplace rejects them).
 
 ## Develop and test
 - Logic: `node tests/model.test.js`.
@@ -44,4 +44,6 @@ Opt-in only. [docs/agent-instructions.md](docs/agent-instructions.md) is a block
 
 ## Guard for agents
 
-`bin/htm-guard` is symlinked as `wtype`, `omarchy-restart-shell` and `hyprctl` in `~/.local/bin`. Inside a Paperclip agent run (`PAPERCLIP_RUN_ID` set) these refuse to run (exit 99) unless an `htm start` session is active; everywhere else they pass straight through to the real command. Set `HTM_GUARD_OFF=1` to bypass.
+`bin/htm-guard` is symlinked as `wtype`, `omarchy-restart-shell` and `hyprctl` in `~/.local/bin` (`htm-install-agent guard`). Inside an agent run these refuse to run (exit 99) unless an `htm start` session is active; everywhere else they pass straight through to the real command. An agent run is detected by `CLAUDECODE` (Claude Code), `PAPERCLIP_RUN_ID` (Paperclip) or `HTM_GUARD=1` (set it yourself for any other agent). `HTM_GUARD_OFF=1` bypasses the guard. Only these three commands are covered; `~/.local/bin` must come first in `PATH`.
+
+Proposal for Omarchy itself (plugins shipping agent skills): [docs/omarchy-feature-request-agent-skills.md](docs/omarchy-feature-request-agent-skills.md).

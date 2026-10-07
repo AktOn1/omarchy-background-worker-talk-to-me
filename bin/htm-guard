@@ -1,7 +1,8 @@
 #!/bin/bash
 # htm-guard: installed as wtype / omarchy-restart-shell / hyprctl in ~/.local/bin.
-# Inside a Paperclip agent run it refuses desktop-touching calls unless an htm session is active,
-# so agents cannot move windows or send keys without the TESTING banner. Elsewhere it is a pass-through.
+# Inside an agent run (Claude Code: CLAUDECODE, Paperclip: PAPERCLIP_RUN_ID, or any agent via HTM_GUARD=1)
+# it refuses desktop-touching calls unless an htm session is active, so agents cannot move windows or
+# send keys without the TESTING banner. Elsewhere it is a pass-through. HTM_GUARD_OFF=1 bypasses it.
 name=$(basename "$0")
 self=$(readlink -f "$0")
 
@@ -19,7 +20,10 @@ case $name in
   hyprctl) [[ " $* " =~ \ (dispatch|reload|keyword)\  || " $* " == *"dispatch "* ]] && touches=1 ;;
 esac
 
-if (( touches )) && [[ -n ${PAPERCLIP_RUN_ID:-} && -z ${HTM_GUARD_OFF:-} ]]; then
+in_agent=0
+[[ -n ${PAPERCLIP_RUN_ID:-} || -n ${CLAUDECODE:-} || ${HTM_GUARD:-} == 1 ]] && in_agent=1
+
+if (( touches && in_agent )) && [[ -z ${HTM_GUARD_OFF:-} ]]; then
   state=$("$(dirname "$self")/htm" status 2>/dev/null)
   if [[ $state != *'"phase":"active"'* ]]; then
     cat >&2 <<MSG
@@ -27,7 +31,7 @@ $name blocked: this touches Libor's live desktop and no Ask Me While Testing ses
 Run:  htm start "<your name>: <what you will do>"   (5 s countdown + TESTING banner)
 Then repeat this command, and finish with:  htm end
 If htm start prints "cancelled" or "postpone:<min>": touch nothing, do other work, retry later.
-Playbook: desktop-testing-with-human-feedback (core-rules).
+Not wanted? The human can run htm-install-agent guard-remove, or set HTM_GUARD_OFF=1.
 MSG
     exit 99
   fi
