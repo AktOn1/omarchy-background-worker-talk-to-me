@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.akton1.human-test-mode",
-  "name": "Human Test Mode",
+  "id": "io.github.akton1.ask-me-while-testing",
+  "name": "Ask Me While Testing",
   "version": "0.1.0",
   "author": "AktOn1",
   "license": "MIT",

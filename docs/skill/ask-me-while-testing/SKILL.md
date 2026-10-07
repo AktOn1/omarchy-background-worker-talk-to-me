@@ -1,5 +1,5 @@
 ---
-name: human-test-mode
+name: ask-me-while-testing
 description: >
   Use when a task changes anything visible on the Omarchy/Hyprland desktop: moving or
   resizing windows, workspaces, the bar, animations, window rules, overlays, themes.
@@ -8,9 +8,9 @@ description: >
   window moves, workspace switch, bar change, Hyprland rule test.
 ---
 
-# Human Test Mode
+# Ask Me While Testing
 
-Human Test Mode (plugin `io.github.akton1.human-test-mode`) shows a TESTING banner on the
+Ask Me While Testing (plugin `io.github.akton1.ask-me-while-testing`) shows a TESTING banner on the
 desktop and lets you ask the human a yes/no question that they answer with Y / N / ? , or a free-text question they answer in a textbox.
 
 ## Check first

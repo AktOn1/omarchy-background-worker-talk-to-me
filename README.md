@@ -1,4 +1,4 @@
-# Human Test Mode
+# Ask Me While Testing
 
 Omarchy shell plugin that lets a script or AI agent that changes your desktop (moving windows, workspaces, the bar, animations) ask you quick yes/no questions, instead of slow screenshot loops. Origin: AKT-460 / AKT-463.
 
@@ -23,19 +23,19 @@ In solo mode `htm ask` prints `timeout` at once (nobody is there to answer). Onl
 
 ## Install
 ```
-omarchy plugin add <repo url> --enable        # or copy this folder to ~/.config/omarchy/plugins/io.github.akton1.human-test-mode/
-ln -s ~/.config/omarchy/plugins/io.github.akton1.human-test-mode/bin/htm ~/.local/bin/htm
+omarchy plugin add <repo url> --enable        # or copy this folder to ~/.config/omarchy/plugins/io.github.akton1.ask-me-while-testing/
+ln -s ~/.config/omarchy/plugins/io.github.akton1.ask-me-while-testing/bin/htm ~/.local/bin/htm
 ```
 Requires `omarchy-shell` running. No network, no sudo, no changes to your config. State: short-lived result files in `$XDG_RUNTIME_DIR/htm/` (removed by `htm`, gone at logout).
 
 ## Remove
 ```
-omarchy plugin disable io.github.akton1.human-test-mode && omarchy plugin remove io.github.akton1.human-test-mode
+omarchy plugin disable io.github.akton1.ask-me-while-testing && omarchy plugin remove io.github.akton1.ask-me-while-testing
 rm -f ~/.local/bin/htm; rm -rf "$XDG_RUNTIME_DIR/htm"
 ```
 
 ## For agents
-Opt-in only. [docs/agent-instructions.md](docs/agent-instructions.md) is a block to paste into AGENTS.md / CLAUDE.md, and [docs/skill/human-test-mode/SKILL.md](docs/skill/human-test-mode/SKILL.md) is a Claude Code skill (copy to `~/.claude/skills/human-test-mode/`). No root AGENTS.md/CLAUDE.md on purpose (the marketplace rejects them).
+Opt-in only. [docs/agent-instructions.md](docs/agent-instructions.md) is a block to paste into AGENTS.md / CLAUDE.md, and [docs/skill/ask-me-while-testing/SKILL.md](docs/skill/ask-me-while-testing/SKILL.md) is a Claude Code skill (copy to `~/.claude/skills/ask-me-while-testing/`). No root AGENTS.md/CLAUDE.md on purpose (the marketplace rejects them).
 
 ## Develop and test
 - Logic: `node tests/model.test.js`.

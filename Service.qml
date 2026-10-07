@@ -1,4 +1,4 @@
-// Human Test Mode: service. Shows a TESTING banner while a script or agent changes the
+// Ask Me While Testing: service. Shows a TESTING banner while a script or agent changes the
 // desktop, a countdown at the start, and a one-key question card on request.
 //
 // The keyboard is grabbed only while the countdown or a question is on screen. The banner
@@ -323,7 +323,7 @@ Scope {
       implicitHeight: pill.height
       color: "transparent"
       exclusionMode: ExclusionMode.Ignore
-      WlrLayershell.namespace: "human-test-mode-banner"
+      WlrLayershell.namespace: "ask-me-while-testing-banner"
       WlrLayershell.layer: WlrLayer.Overlay
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
@@ -393,7 +393,7 @@ Scope {
     implicitHeight: card.height
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.namespace: "human-test-mode-prompt"
+    WlrLayershell.namespace: "ask-me-while-testing-prompt"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: root.promptOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 

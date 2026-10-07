@@ -1,5 +1,5 @@
 #!/bin/bash
-# htm: command line for the Human Test Mode Omarchy shell plugin.
+# htm: command line for the Ask Me While Testing Omarchy shell plugin.
 # Usage: htm start [LABEL] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
 #        htm ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 #        htm say "TEXT"
@@ -9,7 +9,7 @@ set -u
 
 usage() {
   cat <<'USAGE'
-htm: Human Test Mode
+htm: Ask Me While Testing
 
   htm start [LABEL] [--countdown SEC] [--max MIN]
       Countdown banner (default 5 s). Prints "human" when the person pressed Y,
@@ -54,7 +54,7 @@ call() {
   out=$(ipc "$@") || die "${out:-omarchy-shell is not running}"
   case $out in
     ok|"{"*) printf '%s\n' "$out" ;;
-    *"Target not found"*) die "plugin not loaded (omarchy plugin enable io.github.akton1.human-test-mode)" ;;
+    *"Target not found"*) die "plugin not loaded (omarchy plugin enable io.github.akton1.ask-me-while-testing)" ;;
     error:*) die "${out#error:}" ;;
     *) die "${out:-no answer from the shell}" ;;
   esac
