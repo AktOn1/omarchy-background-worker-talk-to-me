@@ -16,19 +16,22 @@ guessing from screenshots.
 
 1. Before the first visible change run `htm start "short title"`. It shows a 5 second
    countdown; the human presses Y to join. No key means solo mode (you continue alone,
-   the TESTING banner is still shown). Do not start a second session while one is open.
+   the TESTING banner is still shown). It can also print `cancelled` (Esc: not now; touch nothing, do other work, retry later) or `postpone:<min>` (P, exit code 5: do other non-visual work for `<min>` minutes, then run `htm start` again). Do not start a second session while one is open.
 2. After each visible change ask one question that can be answered by looking:
    `htm ask "Did the window move from left to right?"`. It prints exactly one of
-   `yes`, `no`, `unsure`, `timeout` or `ended` and exits. Act on it:
-   - `ended` (or `htm start` printing `cancelled`): the human pressed Esc. Stop all visible changes, restore what you changed, and report.
+   `yes`, `no`, `unsure`, `text:<reply>`, `postpone:<min>`, `timeout` or `ended` and exits. Act on it:
+   - `ended`: the human pressed Esc. Stop all visible changes, restore what you changed, and report.
    - `yes`: continue.
+   - `text:<reply>`: the human typed a reply (they pressed T on a yes/no card). Read it as their answer or comment and act on it.
+   - `postpone:<min>` (exit code 5, also from `htm start`): the human wants to test later. The session is already closed. Stop touching the desktop now, restore what you changed, do other non-visual work or wait `<min>` minutes, then run `htm start` again and continue with the same step.
    - `no`: fix and ask again (at most 3 attempts per question, then report what you tried).
    - `unsure` / `timeout`: do not treat as success. Try a screenshot check, or say in your report that the result was not confirmed.
+   For an open question that cannot be answered yes/no use `htm ask "What do you see?" --text`: a textbox opens and it prints `text:<reply>`. Use it sparingly, typing is slower than a key press.
 3. Use `htm say "text"` for a short status line that needs no answer.
 4. ALWAYS finish with `htm end`, also when you fail or give up (use a shell `trap` or
    `htm end` in your cleanup). Never leave the TESTING banner up.
 
-Rules: one question per `htm ask`, yes/no phrasing, under 100 characters. Do not ask
+Rules: one question per `htm ask`, yes/no phrasing unless you really need words (`--text`), under 100 characters. Do not ask
 when nothing visible changed. Do not use `htm` for headless or non-visual work.
 If `htm` is not installed (`command -v htm`), skip this section and say so in your report.
 ```

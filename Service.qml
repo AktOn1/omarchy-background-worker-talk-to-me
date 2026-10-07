@@ -5,8 +5,8 @@
 // never takes the keyboard.
 //
 // IPC (target "htm"; the `htm` command wraps these and polls the result files):
-//   start <id> <label> <countdownSec> <maxMinutes>   countdown, result file: human | solo | cancelled
-//   ask <id> <question> <timeoutSec>                 result file: yes | no | unsure | timeout | ended
+//   start <id> <label> <countdownSec> <maxMinutes>   countdown, result file: human | solo | cancelled | postpone:<min>
+//   ask <id> <question> <timeoutSec> <choice|text>   result file: yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 //   say <text> | end | cancel <id> | status | ping
 // Result files: $XDG_RUNTIME_DIR/htm/<id>.result (the id is validated, no paths from callers).
 
@@ -28,7 +28,7 @@ Scope {
   readonly property string runtimeBase: Quickshell.env("XDG_RUNTIME_DIR") || ""
   readonly property string runtimeDir: runtimeBase + "/htm"
 
-  // idle | countdown | active
+  // idle | countdown | active | paused (human postponed the test; banner counts down, agent restarts it)
   property string phase: "idle"
   // human | solo (only meaningful while active)
   property string mode: ""
@@ -40,6 +40,15 @@ Scope {
   property string question: ""
   property int askTotal: 60
   property int askLeft: 0
+  // true while the free-text box is open; typeOnly = the question was asked as "text" (Esc stops the test)
+  property bool typing: false
+  property bool typeOnly: false
+  // true while the "postpone for how many minutes" box is open (typing is true too)
+  property bool postponing: false
+  // seconds the countdown stays paused while the postpone box is open
+  property int countdownTypeLeft: 0
+  property double pausedEnd: 0
+  property int pausedLeft: 0
   property string sayText: ""
   property double sessionEnd: 0
   property int sessionLeft: 0
@@ -110,6 +119,9 @@ Scope {
     root.startId = ""
     root.askId = ""
     root.question = ""
+    root.typing = false
+    root.typeOnly = false
+    root.postponing = false
     root.sayText = ""
     root.mode = ""
     root.label = ""
@@ -119,7 +131,7 @@ Scope {
     sayTimer.stop()
   }
 
-  function askQuestion(id, rawQuestion, rawTimeout) {
+  function askQuestion(id, rawQuestion, rawTimeout, rawKind) {
     const cid = Model.cleanId(id)
     if (!cid) return "error:bad id"
     if (root.phase !== "active") {
@@ -131,9 +143,12 @@ Scope {
       return "ok"
     }
     if (root.askId !== "") root.writeResult(root.askId, "superseded")
+    const kind = Model.askKind(rawKind)
     root.question = Model.cleanText(rawQuestion, 160) || "?"
-    root.askTotal = Model.clampInt(rawTimeout, 3, 600, Model.DEFAULTS.askTimeout)
+    root.askTotal = Model.clampInt(rawTimeout, 3, 600, kind === "text" ? Model.DEFAULTS.textTimeout : Model.DEFAULTS.askTimeout)
     root.askLeft = root.askTotal
+    root.typeOnly = kind === "text"
+    root.typing = root.typeOnly
     root.askId = cid
     return "ok"
   }
@@ -143,10 +158,57 @@ Scope {
     root.writeResult(root.askId, result)
     root.askId = ""
     root.question = ""
+    root.typing = false
+    root.typeOnly = false
+    root.postponing = false
+  }
+
+  function openTyping() {
+    root.typing = true
+    root.askTotal = Math.max(root.askLeft, 90)
+    root.askLeft = root.askTotal
+  }
+
+  function openPostpone() {
+    if (root.phase === "countdown") {
+      root.countdownTypeLeft = 60
+      root.typing = true
+    } else if (!root.typing) root.openTyping()
+    root.postponing = true
+  }
+
+  function submitText(raw) {
+    if (root.postponing) {
+      const pr = Model.postponeResult(raw)
+      if (pr !== "") root.postpone(pr)
+      return
+    }
+    const result = Model.textResult(raw)
+    if (result !== "") root.answer(result)
+  }
+
+  // Ends the test now; the banner turns into a "paused" pill and the agent gets postpone:<min>.
+  function postpone(result) {
+    const minutes = parseInt(result.slice(9), 10)
+    const lbl = root.label
+    root.endSession(result, result)
+    root.label = lbl
+    root.pausedEnd = Date.now() + minutes * 60 * 1000
+    root.pausedLeft = minutes * 60
+    root.phase = "paused"
+    ticker.restart()
+  }
+
+  function escapeTyping() {
+    if (root.postponing) {
+      root.postponing = false
+      if (!root.typeOnly) root.typing = false
+    } else if (root.typeOnly) root.endSession("cancelled", "ended")
+    else root.typing = false
   }
 
   function say(rawText) {
-    if (root.phase === "idle") return "error:no session"
+    if (root.phase === "idle" || root.phase === "paused") return "error:no session"
     root.sayText = Model.cleanText(rawText, 160)
     if (root.sayText !== "") sayTimer.restart()
     return "ok"
@@ -156,7 +218,7 @@ Scope {
     const cid = Model.cleanId(id)
     if (cid === "") return "error:bad id"
     if (cid === root.startId) root.endSession("cancelled", "ended")
-    else if (cid === root.askId) { root.askId = ""; root.question = "" }
+    else if (cid === root.askId) { root.askId = ""; root.question = ""; root.typing = false; root.typeOnly = false; root.postponing = false }
     return "ok"
   }
 
@@ -166,19 +228,38 @@ Scope {
       mode: root.mode,
       label: root.label,
       question: root.question,
-      remainingSec: root.sessionLeft
+      remainingSec: root.phase === "paused" ? root.pausedLeft : root.sessionLeft
     })
   }
 
   function handleKey(event) {
+    if (root.typing) return
     const action = Model.keyAction(root.promptKind, event.text, event.key === Qt.Key_Escape)
     if (action === "") return
     event.accepted = true
     root.act(action)
   }
 
+  function resetPrompt() {
+    replyInput.text = ""
+    Qt.callLater(root.focusPrompt)
+  }
+
+  onTypingChanged: root.resetPrompt()
+  onPostponingChanged: root.resetPrompt()
+  onAskIdChanged: if (root.askId !== "") root.resetPrompt()
+
+  function focusPrompt() {
+    if (root.typing) replyInput.forceActiveFocus()
+    else keys.forceActiveFocus()
+  }
+
   function act(action) {
     if (action === "end") root.endSession("cancelled", "ended")
+    else if (action === "type") root.openTyping()
+    else if (action === "postpone") root.openPostpone()
+    else if (action === "send") root.submitText(replyInput.text)
+    else if (action === "esc") root.escapeTyping()
     else if (root.promptKind === "countdown") root.beginActive(action)
     else root.answer(action)
   }
@@ -188,6 +269,16 @@ Scope {
     interval: 1000
     repeat: true
     onTriggered: {
+      if (root.phase === "paused") {
+        root.pausedLeft = Math.max(0, Math.round((root.pausedEnd - Date.now()) / 1000))
+        if (root.pausedLeft <= 0) root.endSession("cancelled", "ended")
+        return
+      }
+      if (root.phase === "countdown" && root.typing) {
+        root.countdownTypeLeft -= 1
+        if (root.countdownTypeLeft <= 0) root.escapeTyping()
+        return
+      }
       if (root.phase === "countdown") {
         root.countdownLeft -= 1
         if (root.countdownLeft <= 0) root.beginActive("solo")
@@ -201,12 +292,14 @@ Scope {
     }
   }
 
+  RegularExpressionValidator { id: minutesValidator; regularExpression: /[0-9]{0,4}/ }
+
   Timer { id: sayTimer; interval: Model.DEFAULTS.sayMs; onTriggered: root.sayText = "" }
 
   IpcHandler {
     target: "htm"
     function start(id: string, label: string, countdown: string, maxMinutes: string): string { return root.startSession(id, label, countdown, maxMinutes) }
-    function ask(id: string, question: string, timeout: string): string { return root.askQuestion(id, question, timeout) }
+    function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
     function say(text: string): string { return root.say(text) }
     function end(): string { root.endSession("cancelled", "ended"); return "ok" }
     function cancel(id: string): string { return root.cancel(id) }
@@ -239,7 +332,7 @@ Scope {
         width: Math.max(Style.space(220), bannerCol.implicitWidth + Style.space(28))
         height: bannerCol.implicitHeight + Style.space(14)
         radius: Style.cornerRadius
-        color: Color.urgent
+        color: root.phase === "paused" ? Color.accent : Color.urgent
         border.width: Math.max(1, Style.space(1))
         border.color: Util.alpha(Color.background, 0.6)
 
@@ -255,7 +348,7 @@ Scope {
             font.family: Style.font.family
             font.pixelSize: Style.font.title
             font.bold: true
-            text: "TESTING in progress"
+            text: root.phase === "paused" ? "Testing paused" : "TESTING in progress"
           }
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
@@ -263,7 +356,7 @@ Scope {
             color: Color.background
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
-            text: root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo")) + (root.phase === "active" ? "  ·  " + Model.remainingText(root.sessionLeft) : "")
+            text: root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo")) + (root.phase === "active" ? "  ·  " + Model.remainingText(root.sessionLeft) : "")
           }
           Text {
             visible: root.sayText !== ""
@@ -304,7 +397,7 @@ Scope {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: root.promptOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
-    onVisibleChanged: if (visible) keys.forceActiveFocus()
+    onVisibleChanged: if (visible) root.focusPrompt()
 
     Rectangle {
       id: card
@@ -372,14 +465,66 @@ Scope {
           }
         }
 
+        Rectangle {
+          visible: root.typing
+          width: parent.width
+          height: Style.spacing.controlHeight
+          radius: Style.cornerRadius
+          color: Style.normalFill
+          border.width: 1
+          border.color: replyInput.activeFocus ? Color.accent : Style.normalBorderColor
+
+          TextInput {
+            id: replyInput
+            anchors.fill: parent
+            anchors.leftMargin: Style.space(10)
+            anchors.rightMargin: Style.space(10)
+            verticalAlignment: TextInput.AlignVCenter
+            clip: true
+            maximumLength: root.postponing ? 4 : 500
+            inputMethodHints: root.postponing ? Qt.ImhDigitsOnly : Qt.ImhNone
+            validator: root.postponing ? minutesValidator : null
+            color: Color.popups.text
+            selectionColor: Color.accent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            Keys.onReturnPressed: root.submitText(text)
+            Keys.onEnterPressed: root.submitText(text)
+            Keys.onEscapePressed: root.escapeTyping()
+            Keys.onPressed: event => {
+              if (!root.postponing && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) {
+                event.accepted = true
+                root.openPostpone()
+              }
+            }
+          }
+          Text {
+            visible: replyInput.text === ""
+            anchors.left: parent.left
+            anchors.leftMargin: Style.space(10)
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            text: root.postponing ? "Postpone for how many minutes? Enter sends" : "Type your answer, Enter sends"
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            color: Util.alpha(Color.popups.text, 0.45)
+          }
+        }
+
         Row {
           anchors.horizontalCenter: parent.horizontalCenter
           spacing: Style.space(10)
 
           Repeater {
             model: root.promptKind === "countdown"
-              ? [ { key: "Y", text: "I'm here", action: "human" }, { key: "Esc", text: "cancel", action: "end" } ]
-              : [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "Esc", text: "stop test", action: "end" } ]
+              ? (root.postponing
+                ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
+                : [ { key: "Y", text: "I'm here", action: "human" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" } ])
+              : root.postponing
+                ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
+              : root.typing
+                ? [ { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? "stop test" : "back", action: "esc" } ]
+                : [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "T", text: "type reply", action: "type" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "stop test", action: "end" } ]
 
             Rectangle {
               required property var modelData

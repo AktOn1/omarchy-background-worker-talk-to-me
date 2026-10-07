@@ -3,22 +3,22 @@
 Omarchy shell plugin that lets a script or AI agent that changes your desktop (moving windows, workspaces, the bar, animations) ask you quick yes/no questions, instead of slow screenshot loops. Origin: AKT-460 / AKT-463.
 
 ## The flow
-1. **Countdown.** `htm start "Desktop testing"` shows a card "Desktop testing is about to start 5 4 3 2 1". **Y** = "I'm here, I'll help" (human mode). **Esc** = cancel (the agent is told to stop). No key = the agent goes on alone (solo mode).
+1. **Countdown.** `htm start "Desktop testing"` shows a card "Desktop testing is about to start 5 4 3 2 1". **Y** = "I'm here, I'll help" (human mode). **P** = postpone: type the minutes, Enter sends; the countdown waits while you type, the banner turns into a blue "Testing paused, resumes in M:SS" pill and `htm start` prints `postpone:<minutes>` (exit code 5). **Esc** = cancel (`cancelled`, exit 4: not now, the agent stops). No key = the agent goes on alone (solo mode).
 2. **TESTING banner.** For the whole session a small always-on-top banner shows "TESTING in progress", the title, the mode and the time left. It never takes the keyboard. Click it to end the session.
-3. **Questions.** `htm ask "Did the window move from left to right?"` shows the question. Press **Y** / **N**, or **?** for "can't tell". The command prints `yes`, `no`, `unsure` or `timeout` and exits.
-4. **Stop.** `htm end` removes the banner. Safety nets: Esc on a question ends the session (`ask` prints `ended`), the session has a hard time limit (default 20 min), a killed `htm ask` withdraws its question.
+3. **Questions.** `htm ask "Did the window move from left to right?"` shows the question. Press **Y** / **N**, or **?** for "can't tell", or **T** to type a reply in a textbox (Enter sends, Esc goes back), or **P** to postpone the test: type the minutes, the banner turns into a "Testing paused, resumes in M:SS" pill and the agent gets `postpone:<minutes>` (exit code 5), stops, and restarts the test after that time. In a `--text` box postponing is **Ctrl+P**. For an open question use `htm ask "What do you see?" --text`: the textbox opens at once. The command prints `yes`, `no`, `unsure`, `text:<what you typed>` or `timeout` and exits.
+4. **Stop.** `htm end` removes the banner. Safety nets: Esc on a question ends the session (Esc in the textbox opened with T only goes back; with `--text` it ends the session) (`ask` prints `ended`), the session has a hard time limit (default 20 min), a killed `htm ask` withdraws its question.
 
-The keyboard is grabbed only while the countdown card or a question is on screen (the countdown needs it to hear Y). The rest of the time you type into your own windows as usual.
+The keyboard is grabbed only while the countdown card or a question (including its textbox) is on screen (the countdown needs it to hear Y). The rest of the time you type into your own windows as usual.
 
 ## Commands
 ```
-htm start [TITLE] [--countdown SEC] [--max MIN]   -> human | solo | cancelled   (default 5 s, 20 min)
-htm ask "QUESTION" [--timeout SEC]                -> yes | no | unsure | timeout | ended  (default 60 s)
+htm start [TITLE] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 5 s, 20 min)
+htm ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended  (default 60 s, 120 s with --text)
 htm say "TEXT"                                     status line on the banner for 8 s, no answer
 htm end                                            end the session
 htm status                                         JSON: phase, mode, title, question, seconds left
 ```
-Exit codes: 0 ok, 1 error (shell not running, plugin not loaded), 3 no session, 4 you pressed Esc (`cancelled` / `ended`).
+Exit codes: 0 ok, 1 error (shell not running, plugin not loaded), 3 no session, 4 you pressed Esc (`cancelled` / `ended`), 5 you pressed P (`postpone:<min>`).
 In solo mode `htm ask` prints `timeout` at once (nobody is there to answer). Only one question at a time; a new one replaces the old.
 
 ## Install
