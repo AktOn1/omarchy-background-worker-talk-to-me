@@ -41,3 +41,7 @@ Opt-in only. [docs/agent-instructions.md](docs/agent-instructions.md) is a block
 - Logic: `node tests/model.test.js`.
 - Scratch shell (does not touch your running shell): make a folder with symlinks to `/usr/share/omarchy/shell/Commons`, `Service.qml`, `HtmModel.js` and a `shell.qml` containing `ShellRoot { Service {} }`; run `quickshell -n -p <folder>`; talk to it with `HTM_QS_PATH=<folder> bin/htm ...`.
 - `omarchy plugin validate .`
+
+## Guard for agents
+
+`bin/htm-guard` is symlinked as `wtype`, `omarchy-restart-shell` and `hyprctl` in `~/.local/bin`. Inside a Paperclip agent run (`PAPERCLIP_RUN_ID` set) these refuse to run (exit 99) unless an `htm start` session is active; everywhere else they pass straight through to the real command. Set `HTM_GUARD_OFF=1` to bypass.
