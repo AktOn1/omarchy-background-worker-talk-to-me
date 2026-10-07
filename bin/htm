@@ -1,0 +1,145 @@
+#!/bin/bash
+# htm: command line for the Human Test Mode Omarchy shell plugin.
+# Usage: htm start [LABEL] [--countdown SEC] [--max MIN]   -> human | solo | cancelled
+#        htm ask "QUESTION" [--timeout SEC]                -> yes | no | unsure | timeout | ended
+#        htm say "TEXT"
+#        htm end
+#        htm status
+set -u
+
+usage() {
+  cat <<'USAGE'
+htm: Human Test Mode
+
+  htm start [LABEL] [--countdown SEC] [--max MIN]
+      Countdown banner (default 5 s). Prints "human" when the person pressed Y,
+      "solo" when nobody did, "cancelled" when they pressed Esc (stop, touch nothing).
+  htm ask "QUESTION" [--timeout SEC]
+      Shows the question; Y / N / ? answers. Prints yes | no | unsure | timeout | ended.
+      "timeout" is printed at once in solo mode. "ended" = the person pressed Esc:
+      stop testing. Exit codes: 0 answered, 1 error, 3 no session (run htm start), 4 ended.
+  htm say "TEXT"      Short status line on the banner (no answer needed).
+  htm end             Remove the banner and finish the session.
+  htm status          Print the session state as JSON.
+
+Environment: HTM_QS_PATH=<dir> talks to a scratch Quickshell config instead of omarchy-shell.
+USAGE
+}
+
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/htm"
+ID=""
+
+ipc() {
+  if [[ -n ${HTM_QS_PATH:-} ]]; then
+    timeout --kill-after=1s 3s qs ipc -n -p "$HTM_QS_PATH" call -- htm "$@" 2>/dev/null
+  else
+    export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+    omarchy-shell htm "$@" 2>&1
+  fi
+}
+
+die() { echo "htm: $1" >&2; exit 1; }
+
+# Calls the plugin; fails with a clear message when the shell or plugin is not there.
+call() {
+  local out
+  out=$(ipc "$@") || die "${out:-omarchy-shell is not running}"
+  case $out in
+    ok|"{"*) printf '%s\n' "$out" ;;
+    *"Target not found"*) die "plugin not loaded (omarchy plugin enable io.github.akton1.human-test-mode)" ;;
+    error:*) die "${out#error:}" ;;
+    *) die "${out:-no answer from the shell}" ;;
+  esac
+}
+
+new_id() { head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
+
+cleanup() {
+  [[ -n $ID ]] && rm -f "$RUNTIME_DIR/$ID.result" "$RUNTIME_DIR/$ID.result.tmp"
+}
+
+# Waits for the plugin to write the result file; prints its first line.
+wait_result() {
+  local file="$RUNTIME_DIR/$ID.result" limit=$1 start=$SECONDS
+  while (( SECONDS - start < limit )); do
+    if [[ -s $file ]]; then
+      head -n1 "$file"
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
+
+on_signal() {
+  [[ -n $ID ]] && ipc cancel "$ID" >/dev/null 2>&1
+  cleanup
+  exit 130
+}
+
+[[ $# -ge 1 ]] || { usage; exit 1; }
+cmd=$1; shift
+
+case $cmd in
+  -h|--help|help) usage ;;
+
+  start)
+    label="" countdown=5 max=20
+    while (( $# )); do
+      case $1 in
+        --countdown) countdown=${2:?--countdown needs seconds}; shift 2 ;;
+        --max) max=${2:?--max needs minutes}; shift 2 ;;
+        *) label=$1; shift ;;
+      esac
+    done
+    [[ $countdown =~ ^[0-9]+$ && $max =~ ^[0-9]+$ ]] || die "--countdown and --max take whole numbers"
+    mkdir -p -m 700 "$RUNTIME_DIR"
+    ID=$(new_id)
+    trap on_signal INT TERM
+    trap cleanup EXIT
+    call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" >/dev/null
+    result=$(wait_result $((countdown + 8))) || { ipc cancel "$ID" >/dev/null 2>&1; die "no answer from the plugin"; }
+    echo "$result"
+    [[ $result == cancelled ]] && exit 4
+    exit 0
+    ;;
+
+  ask)
+    question="" timeout=60
+    while (( $# )); do
+      case $1 in
+        --timeout) timeout=${2:?--timeout needs seconds}; shift 2 ;;
+        *) question=$1; shift ;;
+      esac
+    done
+    [[ -n $question ]] || die 'usage: htm ask "QUESTION" [--timeout SEC]'
+    [[ $timeout =~ ^[0-9]+$ ]] || die "--timeout takes whole seconds"
+    mkdir -p -m 700 "$RUNTIME_DIR"
+    ID=$(new_id)
+    trap on_signal INT TERM
+    trap cleanup EXIT
+    call ask "$ID" "$question" "$timeout" >/dev/null
+    result=$(wait_result $((timeout + 8))) || { ipc cancel "$ID" >/dev/null 2>&1; result=timeout; }
+    case $result in
+      nosession) die "no session: run 'htm start' first" ;;
+      ended) echo ended; exit 4 ;;
+      superseded) echo timeout ;;
+      *) echo "$result" ;;
+    esac
+    ;;
+
+  say)
+    [[ $# -ge 1 ]] || die 'usage: htm say "TEXT"'
+    call say "$*" >/dev/null
+    ;;
+
+  end)
+    call end >/dev/null
+    ;;
+
+  status)
+    call status
+    ;;
+
+  *) usage; exit 1 ;;
+esac
