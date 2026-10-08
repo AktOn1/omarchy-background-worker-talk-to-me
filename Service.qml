@@ -1,7 +1,7 @@
 // Ask Me While Testing: service. Shows a TESTING banner while a script or agent changes the
 // desktop, a countdown at the start, and a one-key question card on request.
 //
-// The keyboard is grabbed only while the countdown or a question is on screen. The banner
+// Cards and the banner show on every screen. The keyboard is grabbed only while the countdown or a question is on screen. The banner
 // never takes the keyboard.
 //
 // IPC (target "htm"; the `htm` command wraps these and polls the result files):
@@ -52,6 +52,16 @@ Scope {
   property string sayText: ""
   property double sessionEnd: 0
   property int sessionLeft: 0
+  // Ctrl alone freezes the countdown / question timer so the text can be read (auto-resumes)
+  property bool held: false
+  property int holdLeft: 0
+  property bool ctrlArmed: false
+  // text typed in the reply / postpone box (shared by the cards on every screen)
+  property string replyText: ""
+  // screen whose card owns the keyboard while a prompt is open
+  property var promptScreen: null
+
+  signal focusRequested()
 
   readonly property bool promptOpen: phase === "countdown" || askId !== ""
   readonly property string promptKind: phase === "countdown" ? "countdown" : "ask"
@@ -232,7 +242,32 @@ Scope {
     })
   }
 
+  function toggleHold() {
+    if (!root.promptOpen) return
+    root.held = !root.held
+    root.holdLeft = Model.DEFAULTS.holdSec
+  }
+
+  // true when the press was the Ctrl key (armed for a Ctrl-alone tap)
+  function ctrlPress(event) {
+    if (event.key === Qt.Key_Control) {
+      if (!event.isAutoRepeat) root.ctrlArmed = true
+      event.accepted = true
+      return true
+    }
+    root.ctrlArmed = false
+    return false
+  }
+
+  function ctrlRelease(event) {
+    if (event.key !== Qt.Key_Control || event.isAutoRepeat) return
+    event.accepted = true
+    if (root.ctrlArmed) root.toggleHold()
+    root.ctrlArmed = false
+  }
+
   function handleKey(event) {
+    if (root.ctrlPress(event)) return
     if (root.typing) return
     const action = Model.keyAction(root.promptKind, event.text, event.key === Qt.Key_Escape)
     if (action === "") return
@@ -241,24 +276,29 @@ Scope {
   }
 
   function resetPrompt() {
-    replyInput.text = ""
-    Qt.callLater(root.focusPrompt)
+    root.replyText = ""
+    Qt.callLater(root.focusRequested)
   }
 
   onTypingChanged: root.resetPrompt()
   onPostponingChanged: root.resetPrompt()
-  onAskIdChanged: if (root.askId !== "") root.resetPrompt()
-
-  function focusPrompt() {
-    if (root.typing) replyInput.forceActiveFocus()
-    else keys.forceActiveFocus()
+  onAskIdChanged: {
+    root.held = false
+    if (root.askId !== "") root.resetPrompt()
+  }
+  onPromptOpenChanged: {
+    root.held = false
+    if (root.promptOpen) {
+      root.promptScreen = root.focusedScreen
+      root.resetPrompt()
+    }
   }
 
   function act(action) {
     if (action === "end") root.endSession("cancelled", "ended")
     else if (action === "type") root.openTyping()
     else if (action === "postpone") root.openPostpone()
-    else if (action === "send") root.submitText(replyInput.text)
+    else if (action === "send") root.submitText(root.replyText)
     else if (action === "esc") root.escapeTyping()
     else if (root.promptKind === "countdown") root.beginActive(action)
     else root.answer(action)
@@ -269,6 +309,12 @@ Scope {
     interval: 1000
     repeat: true
     onTriggered: {
+      if (root.held && root.promptOpen) {
+        root.sessionEnd += 1000
+        root.holdLeft -= 1
+        if (root.holdLeft <= 0) root.held = false
+        return
+      }
       if (root.phase === "paused") {
         root.pausedLeft = Math.max(0, Math.round((root.pausedEnd - Date.now()) / 1000))
         if (root.pausedLeft <= 0) root.endSession("cancelled", "ended")
@@ -381,186 +427,232 @@ Scope {
     }
   }
 
-  // ---- prompt card (focused screen, keyboard grab only while open) ------------
+  // ---- prompt card (every screen; the keyboard goes to the card on the focused screen) ----
 
-  PanelWindow {
-    id: prompt
-    screen: root.focusedScreen
-    visible: root.promptOpen
-    anchors { bottom: true }
-    margins.bottom: Style.space(67)
-    implicitWidth: card.width
-    implicitHeight: card.height
-    color: "transparent"
-    exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.namespace: "ask-me-while-testing-prompt"
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: root.promptOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+  Variants {
+    model: Quickshell.screens
 
-    onVisibleChanged: if (visible) root.focusPrompt()
+    PanelWindow {
+      id: prompt
+      required property var modelData
+      readonly property bool owner: modelData === root.promptScreen
+      screen: modelData
+      visible: root.promptOpen
+      anchors { bottom: true }
+      margins.bottom: Style.space(67)
+      implicitWidth: card.width
+      implicitHeight: card.height
+      color: "transparent"
+      exclusionMode: ExclusionMode.Ignore
+      WlrLayershell.namespace: "ask-me-while-testing-prompt"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: root.promptOpen && owner ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
-    Rectangle {
-      id: card
-      width: Math.max(Style.space(380), Math.min(Style.space(640), cardCol.implicitWidth + Style.space(40)))
-      height: cardCol.implicitHeight + Style.space(32)
-      radius: Style.cornerRadius
-      color: Util.alpha(Color.background, 0.97)
-      border.width: Math.max(1, Style.space(2))
-      border.color: Color.popups.border
-
-      FocusScope {
-        id: keys
-        anchors.fill: parent
-        focus: true
-        Keys.onPressed: event => root.handleKey(event)
+      function refocus() {
+        if (!owner || !visible) return
+        if (root.typing) replyInput.forceActiveFocus()
+        else keys.forceActiveFocus()
       }
 
-      Column {
-        id: cardCol
-        anchors.centerIn: parent
-        width: card.width - Style.space(40)
-        spacing: Style.space(12)
+      onVisibleChanged: if (visible) Qt.callLater(refocus)
+      onOwnerChanged: Qt.callLater(refocus)
 
-        Text {
-          width: parent.width
-          horizontalAlignment: Text.AlignHCenter
-          wrapMode: Text.WordWrap
-          textFormat: Text.PlainText
-          color: Color.popups.text
-          font.family: Style.font.family
-          font.pixelSize: root.promptKind === "countdown" ? Style.font.title : Style.font.heading
-          font.bold: true
-          text: root.promptKind === "countdown" ? root.label + " is about to start" : root.question
+      Connections {
+        target: root
+        function onFocusRequested() { prompt.refocus() }
+      }
+
+      Rectangle {
+        id: card
+        width: Math.max(Style.space(380), Math.min(Style.space(640), cardCol.implicitWidth + Style.space(40)))
+        height: cardCol.implicitHeight + Style.space(32)
+        radius: Style.cornerRadius
+        color: Util.alpha(Color.background, 0.97)
+        border.width: Math.max(1, Style.space(2))
+        border.color: Color.popups.border
+
+        FocusScope {
+          id: keys
+          anchors.fill: parent
+          focus: true
+          Keys.onPressed: event => root.handleKey(event)
+          Keys.onReleased: event => root.ctrlRelease(event)
         }
 
-        Row {
-          visible: root.promptKind === "countdown"
-          anchors.horizontalCenter: parent.horizontalCenter
-          spacing: Style.space(14)
-          Repeater {
-            model: root.countdownTotal
-            Text {
-              required property int index
-              readonly property int n: root.countdownTotal - index
-              textFormat: Text.PlainText
-              text: n
-              font.family: Style.font.family
-              font.pixelSize: Style.font.displayLarge
-              font.bold: n === root.countdownLeft
-              color: n === root.countdownLeft ? Color.accent : Util.alpha(Color.popups.text, n > root.countdownLeft ? 0.25 : 0.6)
-            }
-          }
-        }
+        Column {
+          id: cardCol
+          anchors.centerIn: parent
+          width: card.width - Style.space(40)
+          spacing: Style.space(12)
 
-        Rectangle {
-          visible: root.promptKind === "ask"
-          width: parent.width
-          height: Math.max(Style.space(3), Style.spacing.xs)
-          color: Util.alpha(Color.popups.text, 0.2)
-          Rectangle {
-            height: parent.height
-            width: parent.width * (root.askTotal > 0 ? root.askLeft / root.askTotal : 0)
-            color: Color.accent
-            Behavior on width { NumberAnimation { duration: 900 } }
-          }
-        }
-
-        Rectangle {
-          visible: root.typing
-          width: parent.width
-          height: Style.spacing.controlHeight
-          radius: Style.cornerRadius
-          color: Style.normalFill
-          border.width: 1
-          border.color: replyInput.activeFocus ? Color.accent : Style.normalBorderColor
-
-          TextInput {
-            id: replyInput
-            anchors.fill: parent
-            anchors.leftMargin: Style.space(10)
-            anchors.rightMargin: Style.space(10)
-            verticalAlignment: TextInput.AlignVCenter
-            clip: true
-            maximumLength: root.postponing ? 4 : 500
-            inputMethodHints: root.postponing ? Qt.ImhDigitsOnly : Qt.ImhNone
-            validator: root.postponing ? minutesValidator : null
-            color: Color.popups.text
-            selectionColor: Color.accent
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            Keys.onReturnPressed: root.submitText(text)
-            Keys.onEnterPressed: root.submitText(text)
-            Keys.onEscapePressed: root.escapeTyping()
-            Keys.onPressed: event => {
-              if (!root.postponing && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) {
-                event.accepted = true
-                root.openPostpone()
-              }
-            }
-          }
           Text {
-            visible: replyInput.text === ""
-            anchors.left: parent.left
-            anchors.leftMargin: Style.space(10)
-            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: root.postponing ? "Postpone for how many minutes? Enter sends" : "Type your answer, Enter sends"
+            color: Color.popups.text
             font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            color: Util.alpha(Color.popups.text, 0.45)
+            font.pixelSize: root.promptKind === "countdown" ? Style.font.title : Style.font.heading
+            font.bold: true
+            text: root.promptKind === "countdown" ? root.label + " is about to start" : root.question
           }
-        }
 
-        Row {
-          anchors.horizontalCenter: parent.horizontalCenter
-          spacing: Style.space(10)
+          Row {
+            visible: root.promptKind === "countdown"
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Style.space(14)
+            Repeater {
+              model: root.countdownTotal <= 10 ? root.countdownTotal : 0
+              Text {
+                required property int index
+                readonly property int n: root.countdownTotal - index
+                textFormat: Text.PlainText
+                text: n
+                font.family: Style.font.family
+                font.pixelSize: Style.font.displayLarge
+                font.bold: n === root.countdownLeft
+                color: n === root.countdownLeft ? Color.accent : Util.alpha(Color.popups.text, n > root.countdownLeft ? 0.25 : 0.6)
+              }
+            }
+          }
 
-          Repeater {
-            model: root.promptKind === "countdown"
-              ? (root.postponing
-                ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
-                : [ { key: "Y", text: "I'm here", action: "human" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" } ])
-              : root.postponing
-                ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
-              : root.typing
-                ? [ { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? "stop test" : "back", action: "esc" } ]
-                : [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "T", text: "type reply", action: "type" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "stop test", action: "end" } ]
+          Text {
+            visible: root.promptKind === "countdown" && root.countdownTotal > 10
+            anchors.horizontalCenter: parent.horizontalCenter
+            textFormat: Text.PlainText
+            text: root.countdownLeft
+            font.family: Style.font.family
+            font.pixelSize: Style.font.displayLarge
+            font.bold: true
+            color: Color.accent
+          }
 
+          Rectangle {
+            visible: root.promptKind === "ask"
+            width: parent.width
+            height: Math.max(Style.space(3), Style.spacing.xs)
+            color: Util.alpha(Color.popups.text, 0.2)
             Rectangle {
-              required property var modelData
-              width: keyRow.implicitWidth + Style.space(20)
-              height: Style.spacing.controlHeight
-              radius: Style.cornerRadius
-              color: hover.containsMouse ? Style.hoverFill : Style.normalFill
-              border.width: 1
-              border.color: Style.normalBorderColor
+              height: parent.height
+              width: parent.width * (root.askTotal > 0 ? root.askLeft / root.askTotal : 0)
+              color: Color.accent
+              Behavior on width { NumberAnimation { duration: 900 } }
+            }
+          }
 
-              Row {
-                id: keyRow
-                anchors.centerIn: parent
-                spacing: Style.space(6)
-                Text {
-                  textFormat: Text.PlainText
-                  text: modelData.key
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                  color: Color.accent
-                }
-                Text {
-                  textFormat: Text.PlainText
-                  text: modelData.text
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-                  color: Color.popups.text
+          Rectangle {
+            visible: root.typing
+            width: parent.width
+            height: Style.spacing.controlHeight
+            radius: Style.cornerRadius
+            color: Style.normalFill
+            border.width: 1
+            border.color: replyInput.activeFocus ? Color.accent : Style.normalBorderColor
+
+            TextInput {
+              id: replyInput
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(10)
+              anchors.rightMargin: Style.space(10)
+              verticalAlignment: TextInput.AlignVCenter
+              clip: true
+              maximumLength: root.postponing ? 4 : 500
+              inputMethodHints: root.postponing ? Qt.ImhDigitsOnly : Qt.ImhNone
+              validator: root.postponing ? minutesValidator : null
+              color: Color.popups.text
+              selectionColor: Color.accent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              Keys.onReturnPressed: root.submitText(text)
+              Keys.onEnterPressed: root.submitText(text)
+              Keys.onEscapePressed: root.escapeTyping()
+              onTextEdited: root.replyText = text
+              Binding { target: replyInput; property: "text"; value: root.replyText }
+              Keys.onReleased: event => root.ctrlRelease(event)
+              Keys.onPressed: event => {
+                if (root.ctrlPress(event)) return
+                if (!root.postponing && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) {
+                  event.accepted = true
+                  root.openPostpone()
                 }
               }
-              MouseArea {
-                id: hover
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.act(modelData.action)
+            }
+            Text {
+              visible: replyInput.text === ""
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(10)
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: root.postponing ? "Postpone for how many minutes? Enter sends" : "Type your answer, Enter sends"
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              color: Util.alpha(Color.popups.text, 0.45)
+            }
+          }
+
+          Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            font.family: Style.font.family
+            font.pixelSize: Style.font.bodySmall
+            color: root.held ? Color.accent : Util.alpha(Color.popups.text, 0.55)
+            font.bold: root.held
+            text: root.held ? "Paused so you can read. Press Ctrl again to continue (auto in " + root.holdLeft + " s)" : "Ctrl alone = more time to read"
+          }
+
+          Row {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Style.space(10)
+
+            Repeater {
+              model: root.promptKind === "countdown"
+                ? (root.postponing
+                  ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
+                  : [ { key: "Y", text: "I'm here", action: "human" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" } ])
+                : root.postponing
+                  ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
+                : root.typing
+                  ? [ { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? "stop test" : "back", action: "esc" } ]
+                  : [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "T", text: "type reply", action: "type" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "stop test", action: "end" } ]
+
+              Rectangle {
+                required property var modelData
+                width: keyRow.implicitWidth + Style.space(20)
+                height: Style.spacing.controlHeight
+                radius: Style.cornerRadius
+                color: hover.containsMouse ? Style.hoverFill : Style.normalFill
+                border.width: 1
+                border.color: Style.normalBorderColor
+
+                Row {
+                  id: keyRow
+                  anchors.centerIn: parent
+                  spacing: Style.space(6)
+                  Text {
+                    textFormat: Text.PlainText
+                    text: modelData.key
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    font.bold: true
+                    color: Color.accent
+                  }
+                  Text {
+                    textFormat: Text.PlainText
+                    text: modelData.text
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    color: Color.popups.text
+                  }
+                }
+                MouseArea {
+                  id: hover
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.act(modelData.action)
+                }
               }
             }
           }

@@ -107,7 +107,7 @@ case $cmd in
     trap cleanup EXIT
     call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" >/dev/null
     # typing a postpone time (P) pauses the countdown for up to 60 s
-    result=$(wait_result $((countdown + 70))) || { ipc cancel "$ID" >/dev/null 2>&1; die "no answer from the plugin"; }
+    result=$(wait_result $((countdown + 70 + 125))) || { ipc cancel "$ID" >/dev/null 2>&1; die "no answer from the plugin"; }
     echo "$result"
     [[ $result == cancelled ]] && exit 4
     [[ $result == postpone:* ]] && exit 5
@@ -133,6 +133,7 @@ case $cmd in
     call ask "$ID" "$question" "$timeout" "$kind" >/dev/null
     # typing a reply (T) can extend a choice question by up to 90 s
     grace=8; [[ $kind == choice ]] && grace=98
+    grace=$((grace + 125))  # Ctrl-alone hold: up to 120 s
     result=$(wait_result $((timeout + grace))) || { ipc cancel "$ID" >/dev/null 2>&1; result=timeout; }
     case $result in
       nosession) die "no session: run 'htm start' first" ;;
