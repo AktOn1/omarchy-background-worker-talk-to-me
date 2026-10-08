@@ -1,8 +1,8 @@
-// Run: node tests/model.test.js   (pure logic of HtmModel.js, no Quickshell needed)
+// Run: node tests/model.test.js   (pure logic of TalkToMeModel.js, no Quickshell needed)
 const assert = require("assert")
 const fs = require("fs")
 const path = require("path")
-const src = fs.readFileSync(path.join(__dirname, "..", "HtmModel.js"), "utf8").replace(/^\.pragma library\n/, "")
+const src = fs.readFileSync(path.join(__dirname, "..", "TalkToMeModel.js"), "utf8").replace(/^\.pragma library\n/, "")
 const M = new Function(src + "; return { cleanId, clampInt, cleanText, keyAction, askKind, textResult, postponeResult, remainingText, statusJson, DEFAULTS }")()
 
 assert.strictEqual(M.cleanId("abc123_-Z"), "abc123_-Z")

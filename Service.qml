@@ -18,7 +18,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
-import "HtmModel.js" as Model
+import "TalkToMeModel.js" as Model
 
 Scope {
   id: root
