@@ -1,14 +1,37 @@
 #!/usr/bin/env python3
-# htm-guard-hook: Claude Code PreToolUse hook (matcher Bash). Independent of PATH order, so it also
-# catches absolute paths. Blocks commands that touch the live desktop unless an htm session is active.
+# htm-guard-hook: Claude Code PreToolUse hook (matcher Bash|AskUserQuestion). Independent of PATH order,
+# so it also catches absolute paths. Bash: blocks commands that touch the live desktop unless an htm
+# session is active. AskUserQuestion: while a session is active, questions must go through htm ask.
 import json, os, re, subprocess, sys
 
 if os.environ.get("HTM_GUARD_OFF"):
     sys.exit(0)
 try:
-    cmd = json.load(sys.stdin).get("tool_input", {}).get("command", "")
+    payload = json.load(sys.stdin)
+    cmd = payload.get("tool_input", {}).get("command", "")
+    tool = payload.get("tool_name", "")
 except Exception:
     sys.exit(0)
+
+def session_state():
+    htm = os.path.join(os.path.dirname(os.path.realpath(__file__)), "htm")
+    try:
+        return json.loads(subprocess.run([htm, "status"], capture_output=True, text=True, timeout=5).stdout)
+    except Exception:
+        return {}
+
+if tool == "AskUserQuestion":
+    st = session_state()
+    if st.get("phase") != "active":
+        sys.exit(0)
+    sys.stderr.write(
+        "Blocked: an Ask Me While Testing session is active, so ask Libor on screen, not in this terminal.\n"
+        'Yes/no/unsure: htm ask "Did the window move?"    Open question (he types): htm ask "What do you see?" --text\n'
+        + ("Mode is solo (nobody offered help), so htm ask would print timeout. Run htm end, then restart with a help offer:\n"
+           '  htm start "<name>: <what>" --help "watch the screen and press Y/N after each change"\n'
+           "then use htm ask. " if st.get("mode") == "solo" else "")
+        + "If Libor presses Esc or P (postpone), stop touching the desktop; the terminal is the fallback only after the session ends.\n")
+    sys.exit(2)
 
 # a desktop-touching tool in command position (start, or after ; & | ( ` $( { sudo/env/assignments)
 pre = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:sudo|env|exec|command|nohup|setsid|time)\s+|\w+=\S*\s+)*(?:\S*/)?'
@@ -16,18 +39,15 @@ touch = re.compile(pre + r'(?:wtype|ydotool|dotool|dotoolc|omarchy-restart-shell
 if not touch.search(cmd):
     sys.exit(0)
 
-htm = os.path.join(os.path.dirname(os.path.realpath(__file__)), "htm")
-try:
-    state = subprocess.run([htm, "status"], capture_output=True, text=True, timeout=5).stdout
-except Exception:
-    state = ""
-if '"phase":"active"' in state:
+if session_state().get("phase") == "active":
     sys.exit(0)
 
 sys.stderr.write(
     "Blocked: this command touches Libor's live desktop and no Ask Me While Testing session is active.\n"
-    'Run:  htm start "<your name>: <what you will do>"   (5 s countdown + TESTING banner)\n'
-    "Then repeat the command, and finish with:  htm end\n"
+    'Run:  htm start "<your name>: <what you will do>" --help "watch the screen and press Y/N after each change"\n'
+    "(5 s countdown + TESTING banner; --help adds a Y key so Libor can offer to answer your questions. Drop --help only for hands-off work with no visual questions.)\n"
+    "Then repeat the command. After EACH visible change ask on screen, never in this terminal:  htm ask \"Did X happen?\"  (yes/no/unsure; --text for open questions)\n"
+    "Finish with:  htm end\n"
     'If htm start prints "cancelled" or "postpone:<min>": touch nothing, do other work, retry later.\n'
     "The human can disable this with htm-install-agent guard-remove or HTM_GUARD_OFF=1.\n")
 sys.exit(2)

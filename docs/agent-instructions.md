@@ -21,7 +21,7 @@ guessing from screenshots.
    you testing alone, ask for help: `htm start "short title" --help "watch the screen and
    press Y/N after each window move"`. The card shows that text with a Y key; if they press Y
    you get `human` and `htm ask` works. Without `--help` there is no Y key and no one to ask. It can also print `cancelled` (Esc: not now; touch nothing, do other work, retry later) or `postpone:<min>` (P, exit code 5: do other non-visual work for `<min>` minutes, then run `htm start` again). Do not start a second session while one is open.
-2. Ask right after each visible change, before the next one (do not run all the steps and ask at the end). One question that can be answered by looking:
+2. Ask right after each visible change, before the next one (do not run all the steps and ask at the end). Ask ONLY through `htm ask`, never in the terminal/chat or with a built-in question tool such as AskUserQuestion: the human is looking at the desktop, not at your terminal. One question that can be answered by looking:
    `htm ask "Did the window move from left to right?"`. It prints exactly one of
    `yes`, `no`, `unsure`, `text:<reply>`, `postpone:<min>`, `timeout` or `ended` and exits. Act on it:
    - `ended`: the human pressed Esc. Stop all visible changes, restore what you changed, and report.

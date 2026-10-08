@@ -62,11 +62,16 @@ had = any(mine(e) for e in pre)
 if action == "add" and not had:
     if os.path.exists(path) and not os.path.exists(path + ".htm-backup"):
         shutil.copy(path, path + ".htm-backup")
-    pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": hook, "timeout": 10}]})
+    pre.append({"matcher": "Bash|AskUserQuestion", "hooks": [{"type": "command", "command": hook, "timeout": 10}]})
     print("hook added to " + path)
 elif action == "remove" and had:
     pre[:] = [e for e in pre if not mine(e)]
     print("hook removed from " + path)
+elif action == "add":
+    for e in pre:
+        if mine(e):
+            e["matcher"] = "Bash|AskUserQuestion"
+    print("hook already on (matcher updated)")
 else:
     print("hook already " + ("on" if had else "off"))
     sys.exit(0)
