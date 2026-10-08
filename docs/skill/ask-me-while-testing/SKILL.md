@@ -18,9 +18,13 @@ desktop and lets you ask the human a yes/no question that they answer with Y / N
 visual result was not human-confirmed.
 
 ## Procedure
-1. `htm start "short title"` before the first visible change (5 s countdown; Y = human is
-   here, no key = solo mode and you continue alone). It prints `human`, `solo`, `cancelled` (Esc: not now, touch nothing, do other work and retry later) or `postpone:<min>` (P, exit code 5: wait that many minutes doing non-visual work, then `htm start` again).
-2. Make one visible change, then `htm ask "<question answerable by looking>"`.
+1. `htm start "short title"` before the first visible change (5 s countdown, a heads-up only: the
+   human postpones or cancels it if they are at the desk, otherwise it runs out and you continue
+   alone in solo mode, where `htm ask` prints `timeout` at once). To get answers, ask for help:
+   `htm start "short title" --help "watch the screen and press Y/N after each window move"`; the card
+   shows it with a Y key and Y gives `human`. Use `--help` when a human's eyes are faster or more
+   reliable than you testing alone. Without it there is no Y key. It prints `human`, `solo`, `cancelled` (Esc: not now, touch nothing, do other work and retry later) or `postpone:<min>` (P, exit code 5: wait that many minutes doing non-visual work, then `htm start` again).
+2. Make one visible change, then ask at once (never run all the steps and ask at the end): `htm ask "<question answerable by looking>"`.
    Output is one of `yes` | `no` | `unsure` | `text:<reply>` | `postpone:<min>` | `timeout` | `ended`.
    - `ended`: the human pressed Esc. Stop changing the desktop, restore what you changed, and report.
    - `yes`: next step.

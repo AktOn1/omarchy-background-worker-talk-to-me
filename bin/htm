@@ -1,6 +1,6 @@
 #!/bin/bash
 # htm: command line for the Ask Me While Testing Omarchy shell plugin.
-# Usage: htm start [LABEL] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
+# Usage: htm start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
 #        htm ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 #        htm question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
 #        htm say "TEXT"
@@ -12,9 +12,14 @@ usage() {
   cat <<'USAGE'
 htm: Ask Me While Testing
 
-  htm start [LABEL] [--countdown SEC] [--max MIN]
-      Countdown banner (default 5 s). Prints "human" when the person pressed Y,
-      "solo" when nobody did, "cancelled" when they pressed Esc (not now: stop, touch nothing).
+  htm start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]
+      Countdown banner (default 5 s). It is a heads-up, not a question: the person who is at the
+      desk postpones (P) or cancels (Esc), otherwise it runs out and you continue alone ("solo";
+      "htm ask" then prints "timeout" at once). No Y key unless you pass --help.
+      --help "what I need": say what the person could do that is faster than you testing alone
+      ("watch the screen and press Y/N after each window move"). The card then shows it with
+      a Y key. Prints "human" when they pressed Y (now "htm ask" works), "solo" when nobody did,
+      "cancelled" when they pressed Esc (not now: stop, touch nothing).
       P = the person wants to test later: they type minutes, the banner turns into a "paused"
       pill and this prints postpone:<minutes> (exit 5). Wait that long, then run htm start again.
       Exit codes: 0 human/solo, 1 error, 4 cancelled, 5 postponed.
@@ -182,9 +187,10 @@ case $cmd in
   -h|--help|help) usage ;;
 
   start)
-    label="" countdown=$(setting_get countdown) max=$(setting_get max)
+    label="" help="" countdown=$(setting_get countdown) max=$(setting_get max)
     while (( $# )); do
       case $1 in
+        --help) help=${2:?--help needs text}; shift 2 ;;
         --countdown) countdown=${2:?--countdown needs seconds}; shift 2 ;;
         --max) max=${2:?--max needs minutes}; shift 2 ;;
         *) label=$1; shift ;;
@@ -195,7 +201,7 @@ case $cmd in
     ID=$(new_id)
     trap on_signal INT TERM
     trap cleanup EXIT
-    call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" >/dev/null
+    call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" "$help" >/dev/null
     # typing a postpone time (P) pauses the countdown for up to 60 s
     result=$(wait_result $((countdown + 70 + 125))) || { ipc cancel "$ID" >/dev/null 2>&1; die "no answer from the plugin"; }
     echo "$result"

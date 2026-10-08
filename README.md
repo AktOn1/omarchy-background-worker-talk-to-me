@@ -5,7 +5,7 @@
 Omarchy shell plugin that lets a script or AI agent that changes your desktop (moving windows, workspaces, the bar, animations) ask you quick yes/no questions, instead of slow screenshot loops. Origin: AKT-460 / AKT-463.
 
 ## The flow
-1. **Countdown.** `htm start "Desktop testing"` shows a card "Desktop testing is about to start 5 4 3 2 1". **Y** = "I'm here, I'll help" (human mode). **P** = postpone: type the minutes, Enter sends; the countdown waits while you type, the banner turns into a blue "Testing paused, resumes in M:SS" pill and `htm start` prints `postpone:<minutes>` (exit code 5). **Esc** = cancel (`cancelled`, exit 4: not now, the agent stops). No key = the agent goes on alone (solo mode).
+1. **Countdown.** `htm start "Desktop testing"` shows a card "Desktop testing is about to start 5 4 3 2 1". It is a heads-up, not a question: if you are at the desk and not ready, press **P** or **Esc**; if you are away, it runs out and the agent continues alone. **Y** exists only when the agent asks for help with `htm start "title" --help "watch the screen and press Y/N after each window move"`: the card then says "Faster with your help: …" and Y = "I'll help" (human mode, `htm ask` works). **P** = postpone: type the minutes, Enter sends; the countdown waits while you type, the banner turns into a blue "Testing paused, resumes in M:SS" pill and `htm start` prints `postpone:<minutes>` (exit code 5). **Esc** = cancel (`cancelled`, exit 4: not now, the agent stops). No key = the agent goes on alone (solo mode; `htm ask` then prints `timeout` at once, so an agent that wants answers must pass `--help`).
 **Every screen, more time to read.** The countdown and question cards show on every monitor (the keyboard goes to the card on the screen you are working on; the buttons are clickable on any of them). Tap **Ctrl alone** to freeze the countdown or question timer while you read; tap Ctrl again to continue (it resumes by itself after 120 s). Ctrl+P and other Ctrl combinations do not count. `htm` waits long enough for a hold.
 
 2. **TESTING banner.** For the whole session a small always-on-top banner shows "TESTING in progress", the title, the mode and the time left. It never takes the keyboard. Click it to end the session.
@@ -13,11 +13,11 @@ Omarchy shell plugin that lets a script or AI agent that changes your desktop (m
 4. **Experimental: a question without a test.** `htm question "Which one, A or B?"` shows a plain question card (Y / N / ? / T, Esc dismisses) with no TESTING banner and no countdown, so an agent that is stuck on a decision can ask you while you work in another app. It is **off** until you run `htm settings set questions on`. Agents are told to use it only when blocked and a wrong guess is costly; `question-gap` (default 60 s) refuses a second question too soon. Esc prints `dismissed`; P (postpone) does not exist here.
 5. **Stop.** `htm end` removes the banner. Safety nets: Esc on a question ends the session (Esc in the textbox opened with T only goes back; with `--text` it ends the session) (`ask` prints `ended`), the session has a hard time limit (default 20 min), a killed `htm ask` withdraws its question.
 
-The keyboard is grabbed only while the countdown card or a question (including its textbox) is on screen (the countdown needs it to hear Y). The rest of the time you type into your own windows as usual.
+The keyboard is grabbed only while the countdown card or a question (including its textbox) is on screen (the countdown needs it to hear P and Esc, and Y when help was asked for). The rest of the time you type into your own windows as usual.
 
 ## Commands
 ```
-htm start [TITLE] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 5 s, 20 min)
+htm start [TITLE] [--help TEXT] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 5 s, 20 min)
 htm ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended  (default 60 s, 120 s with --text)
 htm question "QUESTION" [--text] [--timeout SEC]   EXPERIMENTAL, off by default -> yes | no | unsure | text:<typed> | dismissed | timeout | busy | disabled | toosoon  (default 120 s)
 htm settings [get KEY | set KEY VALUE | reset [KEY]]   list or change settings
@@ -63,10 +63,11 @@ While it runs, try **P** (postpone) at the first countdown, **Ctrl** (freeze the
 ### One feature at a time
 | Feature | Paste this |
 |---|---|
-| Whole flow | `Test the Ask Me While Testing plugin: htm start "plugin demo", then move this terminal to workspace 3 and ask me with htm ask whether I saw it, then ask me an open question with --text what I see, then htm end.` |
+| Whole flow | `Test the Ask Me While Testing plugin: htm start "plugin demo" --help "watch and answer my questions", then move this terminal to workspace 3 and ask me with htm ask whether I saw it, then ask me an open question with --text what I see, then htm end.` |
 | Hands-off guard (no mention of htm) | `Move this terminal to workspace 3, make it float, then put it back.` Expect: a block message, then the countdown and the TESTING banner. |
 | Open question | `Run htm start "demo", then htm ask "What do you see on screen?" --text, repeat my answer back to me, then htm end.` |
 | Postpone | `Run htm start "demo". If I postpone, wait that long and start again. Then ask me one yes/no question with htm ask and htm end.` Press **P** and a number of minutes. |
+| Ask for help | `Run htm start "demo" --help "tell me whether the terminal moved", move this terminal to workspace 3 and back, ask me after each move, then htm end.` Press **Y** on the countdown: the card shows the help request and the questions follow. |
 | Cancel | `Run htm start "demo" and tell me what it printed.` Press **Esc**; the agent should say `cancelled` and touch nothing. |
 | Question without a test (experimental) | First `htm settings set questions on` and restart the shell once. Then: `Use htm question to ask me whether to continue, A or B, and do what I answer. Do not run htm start.` |
 

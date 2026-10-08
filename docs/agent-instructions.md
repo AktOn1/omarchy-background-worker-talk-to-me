@@ -15,9 +15,13 @@ use the `htm` command so the human can see and confirm the result instead of you
 guessing from screenshots.
 
 1. Before the first visible change run `htm start "short title"`. It shows a 5 second
-   countdown; the human presses Y to join. No key means solo mode (you continue alone,
-   the TESTING banner is still shown). It can also print `cancelled` (Esc: not now; touch nothing, do other work, retry later) or `postpone:<min>` (P, exit code 5: do other non-visual work for `<min>` minutes, then run `htm start` again). Do not start a second session while one is open.
-2. After each visible change ask one question that can be answered by looking:
+   countdown and a TESTING banner. The countdown is only a heads-up: a human who is there
+   postpones or cancels it, otherwise it runs out and you continue alone (solo mode:
+   `htm ask` prints `timeout` at once). If a human's eyes would be faster or more reliable than
+   you testing alone, ask for help: `htm start "short title" --help "watch the screen and
+   press Y/N after each window move"`. The card shows that text with a Y key; if they press Y
+   you get `human` and `htm ask` works. Without `--help` there is no Y key and no one to ask. It can also print `cancelled` (Esc: not now; touch nothing, do other work, retry later) or `postpone:<min>` (P, exit code 5: do other non-visual work for `<min>` minutes, then run `htm start` again). Do not start a second session while one is open.
+2. Ask right after each visible change, before the next one (do not run all the steps and ask at the end). One question that can be answered by looking:
    `htm ask "Did the window move from left to right?"`. It prints exactly one of
    `yes`, `no`, `unsure`, `text:<reply>`, `postpone:<min>`, `timeout` or `ended` and exits. Act on it:
    - `ended`: the human pressed Esc. Stop all visible changes, restore what you changed, and report.

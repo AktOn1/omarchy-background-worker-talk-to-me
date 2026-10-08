@@ -5,7 +5,7 @@
 // never takes the keyboard.
 //
 // IPC (target "htm"; the `htm` command wraps these and polls the result files):
-//   start <id> <label> <countdownSec> <maxMinutes>   countdown, result file: human | solo | cancelled | postpone:<min>
+//   start <id> <label> <countdownSec> <maxMinutes> <help>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
 //   ask <id> <question> <timeoutSec> <choice|text>   result file: yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 //   quick <id> <question> <timeoutSec> <choice|text>  (experimental) like ask, but also works with no session: a plain
 //                                                question card, no banner. result file adds: busy | dismissed
@@ -35,6 +35,8 @@ Scope {
   // human | solo (only meaningful while active)
   property string mode: ""
   property string label: ""
+  // what the agent asks the person to help with; empty = no help wanted, so the countdown has no Y key
+  property string helpText: ""
   property string startId: ""
   property int countdownTotal: 5
   property int countdownLeft: 0
@@ -101,13 +103,14 @@ Scope {
 
   // ---- session ----------------------------------------------------------------
 
-  function startSession(id, rawLabel, rawCountdown, rawMax) {
+  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp) {
     const cid = Model.cleanId(id)
     if (!cid) return "error:bad id"
     if (root.runtimeBase === "") return "error:no XDG_RUNTIME_DIR"
     if (root.phase !== "idle") root.endSession("cancelled", "ended")
     else if (root.askId !== "") root.answer("superseded")
     root.label = Model.cleanText(rawLabel, 60) || "Desktop testing"
+    root.helpText = Model.cleanText(rawHelp, 160)
     root.startId = cid
     root.countdownTotal = Model.clampInt(rawCountdown, 1, 30, Model.DEFAULTS.countdown)
     root.countdownLeft = root.countdownTotal
@@ -140,6 +143,7 @@ Scope {
     root.sayText = ""
     root.mode = ""
     root.label = ""
+    root.helpText = ""
     root.sessionLeft = 0
     root.phase = "idle"
     ticker.stop()
@@ -332,7 +336,7 @@ Scope {
     else if (action === "postpone") root.openPostpone()
     else if (action === "send") root.submitText(root.replyText)
     else if (action === "esc") root.escapeTyping()
-    else if (root.promptKind === "countdown") root.beginActive(action)
+    else if (root.promptKind === "countdown") { if (action !== "human" || root.helpText !== "") root.beginActive(action) }
     else root.answer(action)
   }
 
@@ -377,7 +381,7 @@ Scope {
 
   IpcHandler {
     target: "htm"
-    function start(id: string, label: string, countdown: string, maxMinutes: string): string { return root.startSession(id, label, countdown, maxMinutes) }
+    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string): string { return root.startSession(id, label, countdown, maxMinutes, help) }
     function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
     function quick(id: string, question: string, timeout: string, kind: string): string { return root.quickQuestion(id, question, timeout, kind) }
     function say(text: string): string { return root.say(text) }
@@ -561,6 +565,18 @@ Scope {
             color: Color.accent
           }
 
+          Text {
+            visible: root.promptKind === "countdown" && root.helpText !== ""
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            color: Color.popups.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            text: "Faster with your help: " + root.helpText
+          }
+
           Rectangle {
             visible: root.promptKind === "ask"
             width: parent.width
@@ -644,7 +660,9 @@ Scope {
               model: root.promptKind === "countdown"
                 ? (root.postponing
                   ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
-                  : [ { key: "Y", text: "I'm here", action: "human" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" } ])
+                  : (root.helpText !== ""
+                    ? [ { key: "Y", text: "I'll help", action: "human" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" } ]
+                    : [ { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" } ]))
                 : root.postponing
                   ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
                 : root.typing
