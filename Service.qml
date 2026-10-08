@@ -4,13 +4,13 @@
 // Cards and the banner show on every screen. The keyboard is grabbed only while the countdown or a question is on screen. The banner
 // never takes the keyboard.
 //
-// IPC (target "htm"; the `htm` command wraps these and polls the result files):
+// IPC (target "talk-to-me"; the `talk-to-me` command wraps these and polls the result files):
 //   start <id> <label> <countdownSec> <maxMinutes> <help>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
 //   ask <id> <question> <timeoutSec> <choice|text>   result file: yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 //   quick <id> <question> <timeoutSec> <choice|text>  (experimental) like ask, but also works with no session: a plain
 //                                                question card, no banner. result file adds: busy | dismissed
 //   say <text> | end | cancel <id> | status | ping
-// Result files: $XDG_RUNTIME_DIR/htm/<id>.result (the id is validated, no paths from callers).
+// Result files: $XDG_RUNTIME_DIR/talk-to-me/<id>.result (the id is validated, no paths from callers).
 
 import QtQuick
 import Quickshell
@@ -28,7 +28,7 @@ Scope {
   property var manifest
 
   readonly property string runtimeBase: Quickshell.env("XDG_RUNTIME_DIR") || ""
-  readonly property string runtimeDir: runtimeBase + "/htm"
+  readonly property string runtimeDir: runtimeBase + "/talk-to-me"
 
   // idle | countdown | active | paused (human postponed the test; banner counts down, agent restarts it)
   property string phase: "idle"
@@ -68,7 +68,7 @@ Scope {
   signal focusRequested()
 
   readonly property bool promptOpen: phase === "countdown" || askId !== ""
-  // a question card with no testing session behind it (htm question)
+  // a question card with no testing session behind it (talk-to-me question)
   readonly property bool standalone: phase === "idle" && askId !== ""
   readonly property string promptKind: phase === "countdown" ? "countdown" : "ask"
 
@@ -380,7 +380,7 @@ Scope {
   Timer { id: sayTimer; interval: Model.DEFAULTS.sayMs; onTriggered: root.sayText = "" }
 
   IpcHandler {
-    target: "htm"
+    target: "talk-to-me"
     function start(id: string, label: string, countdown: string, maxMinutes: string, help: string): string { return root.startSession(id, label, countdown, maxMinutes, help) }
     function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
     function quick(id: string, question: string, timeout: string, kind: string): string { return root.quickQuestion(id, question, timeout, kind) }

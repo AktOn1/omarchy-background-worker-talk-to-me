@@ -1,25 +1,25 @@
 #!/bin/bash
-# htm-install-agent: opt-in setup of the agent side of Background Worker Talk To Me. Nothing here runs by itself.
+# talk-to-me-install-agent: opt-in setup of the agent side of Background Worker Talk To Me. Nothing here runs by itself.
 set -euo pipefail
 root=$(dirname "$(dirname "$(readlink -f "$0")")")
-bindir=${HTM_BIN_DIR:-$HOME/.local/bin}
+bindir=${TALK_TO_ME_BIN_DIR:-$HOME/.local/bin}
 guarded=(wtype omarchy-restart-shell hyprctl)
 start='<!-- background-worker-talk-to-me:start -->'
 end='<!-- background-worker-talk-to-me:end -->'
 
 usage() {
   cat <<U
-Usage: htm-install-agent <command> [args]
+Usage: talk-to-me-install-agent <command> [args]
   skill [DIR]        copy the Claude Code skill to DIR/background-worker-talk-to-me (default ~/.claude/skills)
   block FILE         add or update the agent instructions block in FILE (e.g. ~/.claude/CLAUDE.md or an AGENTS.md)
   guard              make wtype, omarchy-restart-shell and hyprctl refuse to touch the desktop in an agent run
-                     until 'htm start' is active. Two layers: (1) a Claude Code PreToolUse hook in
+                     until 'talk-to-me start' is active. Two layers: (1) a Claude Code PreToolUse hook in
                      ~/.claude/settings.json (works whatever PATH order, catches absolute paths), and
                      (2) shims in $bindir (only effective if $bindir comes before /usr/bin in PATH)
   guard-remove       undo 'guard' (hook and shims)
   all FILE           skill + block FILE + guard
   status             show what is installed
-Agent runs are detected by CLAUDECODE or PAPERCLIP_RUN_ID; for other agents export HTM_GUARD=1.
+Agent runs are detected by CLAUDECODE or PAPERCLIP_RUN_ID; for other agents export TALK_TO_ME_GUARD=1.
 U
 }
 
@@ -52,16 +52,16 @@ install_block() {
 settings=${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
 
 edit_hook() {
-  python3 - "$settings" "$root/bin/htm-guard-hook" "$1" <<'PY'
+  python3 - "$settings" "$root/bin/talk-to-me-guard-hook" "$1" <<'PY'
 import json, os, shutil, sys
 path, hook, action = sys.argv[1:4]
 data = json.load(open(path)) if os.path.exists(path) else {}
 pre = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
-mine = lambda e: any("htm-guard-hook" in h.get("command", "") for h in e.get("hooks", []))
+mine = lambda e: any("talk-to-me-guard-hook" in h.get("command", "") for h in e.get("hooks", []))
 had = any(mine(e) for e in pre)
 if action == "add" and not had:
-    if os.path.exists(path) and not os.path.exists(path + ".htm-backup"):
-        shutil.copy(path, path + ".htm-backup")
+    if os.path.exists(path) and not os.path.exists(path + ".talk-to-me-backup"):
+        shutil.copy(path, path + ".talk-to-me-backup")
     pre.append({"matcher": "Bash|AskUserQuestion", "hooks": [{"type": "command", "command": hook, "timeout": 10}]})
     print("hook added to " + path)
 elif action == "remove" and had:
@@ -83,26 +83,26 @@ PY
 install_guard() {
   edit_hook add
   mkdir -p "$bindir"
-  ln -sf "$root/bin/htm" "$bindir/htm"
-  for n in "${guarded[@]}"; do ln -sf "$root/bin/htm-guard" "$bindir/$n"; done
-  echo "linked htm and guard (${guarded[*]}) into $bindir"
+  ln -sf "$root/bin/talk-to-me" "$bindir/talk-to-me"
+  for n in "${guarded[@]}"; do ln -sf "$root/bin/talk-to-me-guard" "$bindir/$n"; done
+  echo "linked talk-to-me and guard (${guarded[*]}) into $bindir"
   case ":$PATH:" in *":$bindir:"*) ;; *) echo "warning: $bindir is not in PATH" >&2 ;; esac
 }
 
 remove_guard() {
   edit_hook remove
   for n in "${guarded[@]}"; do
-    [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/htm-guard" ]] && rm "$bindir/$n" && echo "removed $bindir/$n"
+    [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/talk-to-me-guard" ]] && rm "$bindir/$n" && echo "removed $bindir/$n"
   done
   return 0
 }
 
 status() {
-  command -v htm >/dev/null && echo "htm: $(command -v htm)" || echo "htm: not in PATH"
+  command -v talk-to-me >/dev/null && echo "talk-to-me: $(command -v talk-to-me)" || echo "talk-to-me: not in PATH"
   [[ -f $HOME/.claude/skills/background-worker-talk-to-me/SKILL.md ]] && echo "skill: installed" || echo "skill: not installed"
-  grep -qs htm-guard-hook "$settings" && echo "guard hook: on" || echo "guard hook: off"
+  grep -qs talk-to-me-guard-hook "$settings" && echo "guard hook: on" || echo "guard hook: off"
   for n in "${guarded[@]}"; do
-    [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/htm-guard" ]] && echo "guard shim $n: on" || echo "guard shim $n: off"
+    [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/talk-to-me-guard" ]] && echo "guard shim $n: on" || echo "guard shim $n: off"
   done
 }
 

@@ -1,75 +1,75 @@
 #!/bin/bash
-# htm: command line for the Background Worker Talk To Me Omarchy shell plugin.
-# Usage: htm start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
-#        htm ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
-#        htm question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
-#        htm say "TEXT"
-#        htm end
-#        htm status
+# talk-to-me: command line for the Background Worker Talk To Me Omarchy shell plugin.
+# Usage: talk-to-me start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
+#        talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
+#        talk-to-me question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
+#        talk-to-me say "TEXT"
+#        talk-to-me end
+#        talk-to-me status
 set -u
 
 usage() {
   cat <<'USAGE'
-htm: Background Worker Talk To Me
+talk-to-me: Background Worker Talk To Me
 
-  htm start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]
+  talk-to-me start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]
       Countdown banner (default 5 s). It is a heads-up, not a question: the person who is at the
       desk postpones (P) or cancels (Esc), otherwise it runs out and you continue alone ("solo";
-      "htm ask" then prints "timeout" at once). No Y key unless you pass --help.
+      "talk-to-me ask" then prints "timeout" at once). No Y key unless you pass --help.
       --help "what I need": say what the person could do that is faster than you testing alone
       ("watch the screen and press Y/N after each window move"). The card then shows it with
-      a Y key. Prints "human" when they pressed Y (now "htm ask" works), "solo" when nobody did,
+      a Y key. Prints "human" when they pressed Y (now "talk-to-me ask" works), "solo" when nobody did,
       "cancelled" when they pressed Esc (not now: stop, touch nothing).
       P = the person wants to test later: they type minutes, the banner turns into a "paused"
-      pill and this prints postpone:<minutes> (exit 5). Wait that long, then run htm start again.
+      pill and this prints postpone:<minutes> (exit 5). Wait that long, then run talk-to-me start again.
       Exit codes: 0 human/solo, 1 error, 4 cancelled, 5 postponed.
-  htm ask "QUESTION" [--text] [--timeout SEC]
+  talk-to-me ask "QUESTION" [--text] [--timeout SEC]
       Shows the question; Y / N / ? answers (T = the person types a reply instead).
       With --text a textbox opens at once (use it for open questions: "What do you see?").
       P = the person wants to postpone the test: they type minutes, the banner turns into a
       "paused" pill and this prints postpone:<minutes> (exit 5). The session is already over:
-      stop touching the desktop, wait that long, then run htm start again.
+      stop touching the desktop, wait that long, then run talk-to-me start again.
       Prints yes | no | unsure | text:<typed answer> | postpone:<min> | timeout | ended.
       "timeout" is printed at once in solo mode. "ended" = the person pressed Esc:
-      stop testing. Exit codes: 0 answered, 1 error, 3 no session (run htm start), 4 ended, 5 postponed.
-  htm question "QUESTION" [--text] [--timeout SEC]      (EXPERIMENTAL, off by default)
+      stop testing. Exit codes: 0 answered, 1 error, 3 no session (run talk-to-me start), 4 ended, 5 postponed.
+  talk-to-me question "QUESTION" [--text] [--timeout SEC]      (EXPERIMENTAL, off by default)
       A plain question card with no testing session and no banner, for a decision you are
       blocked on while the person works in another app. Y / N / ? / T (type) answer, Esc dismisses.
       Prints yes | no | unsure | text:<typed> | dismissed | timeout | busy.
       Exit codes: 0 answered, 4 dismissed, 6 not allowed (setting is off, or asked too soon after
       the last question): decide yourself or use your normal question channel.
-      Turn it on with: htm settings set questions on
-  htm settings [get KEY | set KEY VALUE | reset [KEY]]
+      Turn it on with: talk-to-me settings set questions on
+  talk-to-me settings [get KEY | set KEY VALUE | reset [KEY]]
       Show or change the settings (stored in ~/.config/background-worker-talk-to-me/settings.conf).
-        questions         on|off   allow "htm question" (default off, experimental)
+        questions         on|off   allow "talk-to-me question" (default off, experimental)
         question-timeout  SEC      how long a question card stays (default 120, 3-600)
         question-gap      SEC      minimum seconds between two questions (default 60, 0-3600)
         countdown         SEC      default start countdown (default 5, 1-30)
         max               MIN      default session limit (default 20, 1-240)
-        ask-timeout       SEC      default for htm ask (default 60, 3-600)
-        text-timeout      SEC      default for htm ask --text (default 120, 3-600)
+        ask-timeout       SEC      default for talk-to-me ask (default 60, 3-600)
+        text-timeout      SEC      default for talk-to-me ask --text (default 120, 3-600)
       Command-line options (--countdown, --max, --timeout) still win over settings.
-  htm say "TEXT"      Short status line on the banner (no answer needed).
-  htm end             Remove the banner and finish the session.
-  htm status          Print the session state as JSON.
+  talk-to-me say "TEXT"      Short status line on the banner (no answer needed).
+  talk-to-me end             Remove the banner and finish the session.
+  talk-to-me status          Print the session state as JSON.
 
-Environment: HTM_QS_PATH=<dir> talks to a scratch Quickshell config instead of omarchy-shell.
+Environment: TALK_TO_ME_QS_PATH=<dir> talks to a scratch Quickshell config instead of omarchy-shell.
 USAGE
 }
 
-RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/htm"
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/talk-to-me"
 ID=""
 
 ipc() {
-  if [[ -n ${HTM_QS_PATH:-} ]]; then
-    timeout --kill-after=1s 3s qs ipc -n -p "$HTM_QS_PATH" call -- htm "$@" 2>/dev/null
+  if [[ -n ${TALK_TO_ME_QS_PATH:-} ]]; then
+    timeout --kill-after=1s 3s qs ipc -n -p "$TALK_TO_ME_QS_PATH" call -- talk-to-me "$@" 2>/dev/null
   else
     export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
-    omarchy-shell htm "$@" 2>&1
+    omarchy-shell talk-to-me "$@" 2>&1
   fi
 }
 
-die() { echo "htm: $1" >&2; exit 1; }
+die() { echo "talk-to-me: $1" >&2; exit 1; }
 
 # Calls the plugin; fails with a clear message when the shell or plugin is not there.
 call() {
@@ -137,7 +137,7 @@ setting_validate() {
 
 setting_set() {
   local key=$1 value=$2 tmp
-  setting_valid_key "$key" || die "unknown setting '$key' (htm settings lists them)"
+  setting_valid_key "$key" || die "unknown setting '$key' (talk-to-me settings lists them)"
   setting_validate "$key" "$value"
   mkdir -p "${CONF_FILE%/*}"
   tmp=$(mktemp "$CONF_FILE.XXXXXX")
@@ -149,7 +149,7 @@ setting_reset() {
   local key=$1 tmp
   [[ -r $CONF_FILE ]] || return 0
   if [[ -z $key ]]; then rm -f "$CONF_FILE"; return 0; fi
-  setting_valid_key "$key" || die "unknown setting '$key' (htm settings lists them)"
+  setting_valid_key "$key" || die "unknown setting '$key' (talk-to-me settings lists them)"
   tmp=$(mktemp "$CONF_FILE.XXXXXX")
   grep -v "^$key=" "$CONF_FILE" > "$tmp" || true
   mv "$tmp" "$CONF_FILE"
@@ -219,7 +219,7 @@ case $cmd in
         *) question=$1; shift ;;
       esac
     done
-    [[ -n $question ]] || die 'usage: htm ask "QUESTION" [--text] [--timeout SEC]'
+    [[ -n $question ]] || die 'usage: talk-to-me ask "QUESTION" [--text] [--timeout SEC]'
     if [[ -z $timeout ]]; then
       if [[ $kind == text ]]; then timeout=$(setting_get text-timeout); else timeout=$(setting_get ask-timeout); fi
     fi
@@ -234,7 +234,7 @@ case $cmd in
     grace=$((grace + 125))  # Ctrl-alone hold: up to 120 s
     result=$(wait_result $((timeout + grace))) || { ipc cancel "$ID" >/dev/null 2>&1; result=timeout; }
     case $result in
-      nosession) die "no session: run 'htm start' first" ;;
+      nosession) die "no session: run 'talk-to-me start' first" ;;
       ended) echo ended; exit 4 ;;
       superseded) echo timeout ;;
       postpone:*) echo "$result"; exit 5 ;;
@@ -251,10 +251,10 @@ case $cmd in
         *) question=$1; shift ;;
       esac
     done
-    [[ -n $question ]] || die 'usage: htm question "QUESTION" [--text] [--timeout SEC]'
+    [[ -n $question ]] || die 'usage: talk-to-me question "QUESTION" [--text] [--timeout SEC]'
     if [[ $(setting_get questions) != on ]]; then
       echo "disabled"
-      echo "htm: standalone questions are off (experimental). The person can turn them on with: htm settings set questions on" >&2
+      echo "talk-to-me: standalone questions are off (experimental). The person can turn them on with: talk-to-me settings set questions on" >&2
       exit 6
     fi
     [[ -n $timeout ]] || timeout=$(setting_get question-timeout)
@@ -267,7 +267,7 @@ case $cmd in
       now=$(date +%s)
       if [[ $last =~ ^[0-9]+$ ]] && (( now - last < gap )); then
         echo "toosoon"
-        echo "htm: last question was $((now - last)) s ago (question-gap is $gap s). Decide yourself or batch your questions." >&2
+        echo "talk-to-me: last question was $((now - last)) s ago (question-gap is $gap s). Decide yourself or batch your questions." >&2
         exit 6
       fi
     fi
@@ -283,7 +283,7 @@ case $cmd in
     case $result in
       dismissed) echo dismissed; exit 4 ;;
       superseded|ended|postpone:*) echo timeout ;;
-      busy) echo busy; echo "htm: another card is on screen right now" >&2; exit 6 ;;
+      busy) echo busy; echo "talk-to-me: another card is on screen right now" >&2; exit 6 ;;
       *) echo "$result" ;;
     esac
     ;;
@@ -299,12 +299,12 @@ case $cmd in
         done
         ;;
       get)
-        [[ $# -ge 2 ]] || die "usage: htm settings get KEY"
+        [[ $# -ge 2 ]] || die "usage: talk-to-me settings get KEY"
         setting_valid_key "$2" || die "unknown setting '$2'"
         setting_get "$2"
         ;;
       set)
-        [[ $# -ge 3 ]] || die "usage: htm settings set KEY VALUE"
+        [[ $# -ge 3 ]] || die "usage: talk-to-me settings set KEY VALUE"
         setting_set "$2" "$3"
         echo "$2=$(setting_get "$2")"
         ;;
@@ -312,12 +312,12 @@ case $cmd in
         setting_reset "${2:-}"
         echo "reset"
         ;;
-      *) die "usage: htm settings [get KEY | set KEY VALUE | reset [KEY]]" ;;
+      *) die "usage: talk-to-me settings [get KEY | set KEY VALUE | reset [KEY]]" ;;
     esac
     ;;
 
   say)
-    [[ $# -ge 1 ]] || die 'usage: htm say "TEXT"'
+    [[ $# -ge 1 ]] || die 'usage: talk-to-me say "TEXT"'
     call say "$*" >/dev/null
     ;;
 
