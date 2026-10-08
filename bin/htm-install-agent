@@ -13,8 +13,10 @@ Usage: htm-install-agent <command> [args]
   skill [DIR]        copy the Claude Code skill to DIR/ask-me-while-testing (default ~/.claude/skills)
   block FILE         add or update the agent instructions block in FILE (e.g. ~/.claude/CLAUDE.md or an AGENTS.md)
   guard              make wtype, omarchy-restart-shell and hyprctl refuse to touch the desktop in an agent run
-                     until 'htm start' is active (links htm-guard into $bindir, which must come first in PATH)
-  guard-remove       undo 'guard'
+                     until 'htm start' is active. Two layers: (1) a Claude Code PreToolUse hook in
+                     ~/.claude/settings.json (works whatever PATH order, catches absolute paths), and
+                     (2) shims in $bindir (only effective if $bindir comes before /usr/bin in PATH)
+  guard-remove       undo 'guard' (hook and shims)
   all FILE           skill + block FILE + guard
   status             show what is installed
 Agent runs are detected by CLAUDECODE or PAPERCLIP_RUN_ID; for other agents export HTM_GUARD=1.
@@ -47,7 +49,34 @@ install_block() {
   rm -f "$tmp"
 }
 
+settings=${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
+
+edit_hook() {
+  python3 - "$settings" "$root/bin/htm-guard-hook" "$1" <<'PY'
+import json, os, shutil, sys
+path, hook, action = sys.argv[1:4]
+data = json.load(open(path)) if os.path.exists(path) else {}
+pre = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
+mine = lambda e: any("htm-guard-hook" in h.get("command", "") for h in e.get("hooks", []))
+had = any(mine(e) for e in pre)
+if action == "add" and not had:
+    if os.path.exists(path) and not os.path.exists(path + ".htm-backup"):
+        shutil.copy(path, path + ".htm-backup")
+    pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": hook, "timeout": 10}]})
+    print("hook added to " + path)
+elif action == "remove" and had:
+    pre[:] = [e for e in pre if not mine(e)]
+    print("hook removed from " + path)
+else:
+    print("hook already " + ("on" if had else "off"))
+    sys.exit(0)
+os.makedirs(os.path.dirname(path), exist_ok=True)
+json.dump(data, open(path, "w"), indent=2)
+PY
+}
+
 install_guard() {
+  edit_hook add
   mkdir -p "$bindir"
   ln -sf "$root/bin/htm" "$bindir/htm"
   for n in "${guarded[@]}"; do ln -sf "$root/bin/htm-guard" "$bindir/$n"; done
@@ -56,6 +85,7 @@ install_guard() {
 }
 
 remove_guard() {
+  edit_hook remove
   for n in "${guarded[@]}"; do
     [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/htm-guard" ]] && rm "$bindir/$n" && echo "removed $bindir/$n"
   done
@@ -65,8 +95,9 @@ remove_guard() {
 status() {
   command -v htm >/dev/null && echo "htm: $(command -v htm)" || echo "htm: not in PATH"
   [[ -f $HOME/.claude/skills/ask-me-while-testing/SKILL.md ]] && echo "skill: installed" || echo "skill: not installed"
+  grep -qs htm-guard-hook "$settings" && echo "guard hook: on" || echo "guard hook: off"
   for n in "${guarded[@]}"; do
-    [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/htm-guard" ]] && echo "guard $n: on" || echo "guard $n: off"
+    [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/htm-guard" ]] && echo "guard shim $n: on" || echo "guard shim $n: off"
   done
 }
 

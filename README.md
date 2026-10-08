@@ -44,6 +44,11 @@ Opt-in only. One command sets it up: `bin/htm-install-agent all ~/.claude/CLAUDE
 
 ## Guard for agents
 
-`bin/htm-guard` is symlinked as `wtype`, `omarchy-restart-shell` and `hyprctl` in `~/.local/bin` (`htm-install-agent guard`). Inside an agent run these refuse to run (exit 99) unless an `htm start` session is active; everywhere else they pass straight through to the real command. An agent run is detected by `CLAUDECODE` (Claude Code), `PAPERCLIP_RUN_ID` (Paperclip) or `HTM_GUARD=1` (set it yourself for any other agent). `HTM_GUARD_OFF=1` bypasses the guard. Only these three commands are covered; `~/.local/bin` must come first in `PATH`.
+Two layers, both set up by `htm-install-agent guard`:
+
+1. **Claude Code hook (main layer).** `bin/htm-guard-hook` is added to `~/.claude/settings.json` as a `PreToolUse` hook on Bash. It looks at the command text and blocks (the agent sees the message) `wtype`, `ydotool`, `dotool`, `omarchy-restart-shell` and `hyprctl dispatch|reload|keyword` unless an `htm start` session is active. It does not depend on `PATH` order, so absolute paths are caught too. A backup is kept as `settings.json.htm-backup`; `guard-remove` takes the hook out again.
+2. **PATH shims.** `bin/htm-guard` is symlinked as `wtype`, `omarchy-restart-shell` and `hyprctl` in `~/.local/bin`; inside an agent run (`CLAUDECODE`, `PAPERCLIP_RUN_ID`, or `HTM_GUARD=1` for any other agent) they exit 99 until a session is active. **Caveat:** Omarchy appends `~/.local/bin` *after* `/usr/bin` in the desktop session `PATH`, so these shims only fire where `~/.local/bin` comes first (e.g. Paperclip runs). In a normal `omarchy agent` terminal layer 1 does the work.
+
+`HTM_GUARD_OFF=1` bypasses both layers. The hook only covers Claude Code; other agents rely on the shims plus the instruction block.
 
 Proposal for Omarchy itself (plugins shipping agent skills): [docs/omarchy-feature-request-agent-skills.md](docs/omarchy-feature-request-agent-skills.md).
