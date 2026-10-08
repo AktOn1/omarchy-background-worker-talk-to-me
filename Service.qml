@@ -87,6 +87,9 @@ Scope {
     id: writerComp
     Process {
       id: writer
+      property string payload: ""
+      stdinEnabled: true
+      onStarted: { writer.write(writer.payload); writer.stdinEnabled = false }
       onExited: writer.destroy()
     }
   }
@@ -96,7 +99,8 @@ Scope {
     if (!cid || root.runtimeBase === "") return
     const path = root.runtimeDir + "/" + cid + ".result"
     writerComp.createObject(root, {
-      command: ["sh", "-c", 'umask 077; mkdir -p "${2%/*}" && printf "%s\\n" "$1" > "$2.tmp" && mv "$2.tmp" "$2"', "sh", text, path],
+      command: ["sh", "-c", 'umask 077; mkdir -p "${1%/*}" && cat > "$1.tmp" && mv "$1.tmp" "$1"', "sh", path],
+      payload: text + "\n",
       running: true
     })
   }
