@@ -55,10 +55,10 @@ Open an agent (`omarchy agent`, Claude Code, ...) with the instructions installe
 No mention of the plugin or `htm`. The task itself makes the agent touch the desktop (guard, countdown, banner), need a human eye (yes/no/unsure), ask for an opinion (typed reply) and choose between options (standalone question, if enabled):
 
 ```
-Do a small desktop demo for me. Move this terminal to workspace 3, make it float, then put it back. Then try three window opacity values (0.8, 0.9, 1.0) on this terminal and tell me which looks best. Don't judge from screenshots: I would rather you check with me what I actually see, and ask me in my own words what I think of each one. At the end, if you are torn between two layouts for the result, ask me which I want instead of guessing.
+Do a small desktop demo for me. Move this terminal to workspace 3, make it float, then put it back. Then try three window opacity values (0.8, 0.9, 1.0) on this terminal and tell me which looks best. Don't judge from screenshots: my eyes are faster, so after each change ask me what I see, and ask me in my own words what I think of each opacity. If I offer to help, use it step by step instead of doing everything first and asking at the end. If you are torn between two layouts for the result, ask me which I want instead of guessing.
 ```
 
-While it runs, try **P** (postpone) at the first countdown, **Ctrl** (freeze the timer), **T** (type a reply) and **Esc** (stop). For the last step to use a popup, run `htm settings set questions on` first.
+While it runs: at the first countdown the card shows "Faster with your help: ..." (the agent's offer). Press **Y** to help (questions follow after each change), **P** to postpone, **Esc** to cancel, or do nothing and it runs alone (questions then return `timeout`). Later: **Ctrl** (freeze the timer), **T** (type a reply), **Esc** (stop). For the last step to use a popup, run `htm settings set questions on` first.
 
 ### One feature at a time
 | Feature | Paste this |
