@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.akton1.ask-me-while-testing",
-  "name": "Ask Me While Testing",
+  "id": "io.github.akton1.background-worker-talk-to-me",
+  "name": "Background Worker Talk To Me",
   "version": "0.2.0",
   "author": "AktOn1",
   "license": "MIT",

@@ -1,13 +1,13 @@
 # Agent instructions snippet
 
-Paste the block below into your `AGENTS.md` or `CLAUDE.md` (global or per project) if you want your coding agents to use Ask Me While Testing. Opt-in only: the plugin never edits these files itself.
+Paste the block below into your `AGENTS.md` or `CLAUDE.md` (global or per project) if you want your coding agents to use Background Worker Talk To Me. Opt-in only: the plugin never edits these files itself.
 
-For Claude Code there is also a ready-made skill, see [skill/ask-me-while-testing/SKILL.md](skill/ask-me-while-testing/SKILL.md).
+For Claude Code there is also a ready-made skill, see [skill/background-worker-talk-to-me/SKILL.md](skill/background-worker-talk-to-me/SKILL.md).
 
 ---
 
 ```markdown
-## Desktop testing with human feedback (Ask Me While Testing)
+## Desktop testing with human feedback (Background Worker Talk To Me)
 
 When a task makes you change what is visible on the desktop (moving or resizing windows,
 switching workspaces, changing the bar, animations, window rules, layer-shell overlays),

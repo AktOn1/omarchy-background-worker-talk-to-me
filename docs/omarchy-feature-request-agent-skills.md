@@ -31,4 +31,4 @@ Add an optional manifest field:
 `agentHooks`: a list of command names the plugin wants to wrap while an agent runs (our use case: block `wtype` / `hyprctl dispatch` until the user has seen a TESTING banner). Probably out of scope for a first version.
 
 ## Reference implementation
-Ask Me While Testing (`io.github.akton1.ask-me-while-testing`) does this by hand today with `bin/htm-install-agent`, which copies the skill, appends an instructions block and links a guard.
+Background Worker Talk To Me (`io.github.akton1.background-worker-talk-to-me`) does this by hand today with `bin/htm-install-agent`, which copies the skill, appends an instructions block and links a guard.

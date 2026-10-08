@@ -1,4 +1,4 @@
-# Ask Me While Testing
+# Background Worker Talk To Me
 
 <a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
@@ -29,7 +29,7 @@ Exit codes: 0 ok, 1 error (shell not running, plugin not loaded), 3 no session, 
 In solo mode `htm ask` prints `timeout` at once (nobody is there to answer). Only one question at a time; a new one replaces the old.
 
 ## Settings (command line)
-Stored in `~/.config/ask-me-while-testing/settings.conf` (plain `key=value`). `htm settings` lists them, `htm settings set KEY VALUE` changes one, `htm settings reset [KEY]` goes back to the defaults. Options on the command line (`--countdown`, `--max`, `--timeout`) always win.
+Stored in `~/.config/background-worker-talk-to-me/settings.conf` (plain `key=value`). `htm settings` lists them, `htm settings set KEY VALUE` changes one, `htm settings reset [KEY]` goes back to the defaults. Options on the command line (`--countdown`, `--max`, `--timeout`) always win.
 
 | Key | Values | Default | What |
 |---|---|---|---|
@@ -43,8 +43,8 @@ Stored in `~/.config/ask-me-while-testing/settings.conf` (plain `key=value`). `h
 
 ## Install
 ```
-omarchy plugin add <repo url> --enable        # or copy this folder to ~/.config/omarchy/plugins/io.github.akton1.ask-me-while-testing/
-ln -s ~/.config/omarchy/plugins/io.github.akton1.ask-me-while-testing/bin/htm ~/.local/bin/htm
+omarchy plugin add <repo url> --enable        # or copy this folder to ~/.config/omarchy/plugins/io.github.akton1.background-worker-talk-to-me/
+ln -s ~/.config/omarchy/plugins/io.github.akton1.background-worker-talk-to-me/bin/htm ~/.local/bin/htm
 ```
 Requires `omarchy-shell` running. No network, no sudo, no changes to your config. State: short-lived result files in `$XDG_RUNTIME_DIR/htm/` (removed by `htm`, gone at logout).
 
@@ -63,7 +63,7 @@ While it runs: at the first countdown the card shows "Faster with your help: ...
 ### One feature at a time
 | Feature | Paste this |
 |---|---|
-| Whole flow | `Test the Ask Me While Testing plugin: htm start "plugin demo" --help "watch and answer my questions", then move this terminal to workspace 3 and ask me with htm ask whether I saw it, then ask me an open question with --text what I see, then htm end.` |
+| Whole flow | `Test the Background Worker Talk To Me plugin: htm start "plugin demo" --help "watch and answer my questions", then move this terminal to workspace 3 and ask me with htm ask whether I saw it, then ask me an open question with --text what I see, then htm end.` |
 | Hands-off guard (no mention of htm) | `Move this terminal to workspace 3, make it float, then put it back.` Expect: a block message, then the countdown and the TESTING banner. |
 | Open question | `Run htm start "demo", then htm ask "What do you see on screen?" --text, repeat my answer back to me, then htm end.` |
 | Postpone | `Run htm start "demo". If I postpone, wait that long and start again. Then ask me one yes/no question with htm ask and htm end.` Press **P** and a number of minutes. |
@@ -75,12 +75,12 @@ Tips while testing: tap **Ctrl alone** to freeze a timer, **T** types a reply, *
 
 ## Remove
 ```
-omarchy plugin disable io.github.akton1.ask-me-while-testing && omarchy plugin remove io.github.akton1.ask-me-while-testing
+omarchy plugin disable io.github.akton1.background-worker-talk-to-me && omarchy plugin remove io.github.akton1.background-worker-talk-to-me
 rm -f ~/.local/bin/htm; rm -rf "$XDG_RUNTIME_DIR/htm"
 ```
 
 ## For agents
-Opt-in only. One command sets it up: `bin/htm-install-agent all ~/.claude/CLAUDE.md` (skill + instructions block + guard), or pick parts: `skill`, `block FILE`, `guard`; undo the guard with `guard-remove`; `status` shows what is on. Manual route: [docs/agent-instructions.md](docs/agent-instructions.md) is a block to paste into AGENTS.md / CLAUDE.md, and [docs/skill/ask-me-while-testing/SKILL.md](docs/skill/ask-me-while-testing/SKILL.md) is a Claude Code skill (copy to `~/.claude/skills/ask-me-while-testing/`). No root AGENTS.md/CLAUDE.md on purpose (the marketplace rejects them).
+Opt-in only. One command sets it up: `bin/htm-install-agent all ~/.claude/CLAUDE.md` (skill + instructions block + guard), or pick parts: `skill`, `block FILE`, `guard`; undo the guard with `guard-remove`; `status` shows what is on. Manual route: [docs/agent-instructions.md](docs/agent-instructions.md) is a block to paste into AGENTS.md / CLAUDE.md, and [docs/skill/background-worker-talk-to-me/SKILL.md](docs/skill/background-worker-talk-to-me/SKILL.md) is a Claude Code skill (copy to `~/.claude/skills/background-worker-talk-to-me/`). No root AGENTS.md/CLAUDE.md on purpose (the marketplace rejects them).
 
 ## Develop and test
 - Logic: `node tests/model.test.js`.

@@ -25,7 +25,7 @@ if tool == "AskUserQuestion":
     if st.get("phase") != "active":
         sys.exit(0)
     sys.stderr.write(
-        "Blocked: an Ask Me While Testing session is active, so ask Libor on screen, not in this terminal.\n"
+        "Blocked: an Background Worker Talk To Me session is active, so ask Libor on screen, not in this terminal.\n"
         'Yes/no/unsure: htm ask "Did the window move?"    Open question (he types): htm ask "What do you see?" --text\n'
         + ("Mode is solo (nobody offered help), so htm ask would print timeout. Run htm end, then restart with a help offer:\n"
            '  htm start "<name>: <what>" --help "watch the screen and press Y/N after each change"\n'
@@ -43,7 +43,7 @@ if session_state().get("phase") == "active":
     sys.exit(0)
 
 sys.stderr.write(
-    "Blocked: this command touches Libor's live desktop and no Ask Me While Testing session is active.\n"
+    "Blocked: this command touches Libor's live desktop and no Background Worker Talk To Me session is active.\n"
     'Run:  htm start "<your name>: <what you will do>" --help "watch the screen and press Y/N after each change"\n'
     "(5 s countdown + TESTING banner; --help adds a Y key so Libor can offer to answer your questions. Drop --help only for hands-off work with no visual questions.)\n"
     "Then repeat the command. After EACH visible change ask on screen, never in this terminal:  htm ask \"Did X happen?\"  (yes/no/unsure; --text for open questions)\n"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# htm: command line for the Ask Me While Testing Omarchy shell plugin.
+# htm: command line for the Background Worker Talk To Me Omarchy shell plugin.
 # Usage: htm start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
 #        htm ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 #        htm question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
@@ -10,7 +10,7 @@ set -u
 
 usage() {
   cat <<'USAGE'
-htm: Ask Me While Testing
+htm: Background Worker Talk To Me
 
   htm start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]
       Countdown banner (default 5 s). It is a heads-up, not a question: the person who is at the
@@ -40,7 +40,7 @@ htm: Ask Me While Testing
       the last question): decide yourself or use your normal question channel.
       Turn it on with: htm settings set questions on
   htm settings [get KEY | set KEY VALUE | reset [KEY]]
-      Show or change the settings (stored in ~/.config/ask-me-while-testing/settings.conf).
+      Show or change the settings (stored in ~/.config/background-worker-talk-to-me/settings.conf).
         questions         on|off   allow "htm question" (default off, experimental)
         question-timeout  SEC      how long a question card stays (default 120, 3-600)
         question-gap      SEC      minimum seconds between two questions (default 60, 0-3600)
@@ -77,13 +77,13 @@ call() {
   out=$(ipc "$@") || die "${out:-omarchy-shell is not running}"
   case $out in
     ok|"{"*) printf '%s\n' "$out" ;;
-    *"Target not found"*) die "plugin not loaded (omarchy plugin enable io.github.akton1.ask-me-while-testing)" ;;
+    *"Target not found"*) die "plugin not loaded (omarchy plugin enable io.github.akton1.background-worker-talk-to-me)" ;;
     error:*) die "${out#error:}" ;;
     *) die "${out:-no answer from the shell}" ;;
   esac
 }
 
-CONF_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ask-me-while-testing/settings.conf"
+CONF_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/background-worker-talk-to-me/settings.conf"
 SETTING_KEYS="questions question-timeout question-gap countdown max ask-timeout text-timeout"
 
 setting_default() {

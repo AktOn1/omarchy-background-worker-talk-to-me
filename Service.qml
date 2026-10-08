@@ -1,4 +1,4 @@
-// Ask Me While Testing: service. Shows a TESTING banner while a script or agent changes the
+// Background Worker Talk To Me: service. Shows a TESTING banner while a script or agent changes the
 // desktop, a countdown at the start, and a one-key question card on request.
 //
 // Cards and the banner show on every screen. The keyboard is grabbed only while the countdown or a question is on screen. The banner
@@ -407,7 +407,7 @@ Scope {
       implicitHeight: pill.height
       color: "transparent"
       exclusionMode: ExclusionMode.Ignore
-      WlrLayershell.namespace: "ask-me-while-testing-banner"
+      WlrLayershell.namespace: "background-worker-talk-to-me-banner"
       WlrLayershell.layer: WlrLayer.Overlay
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
@@ -482,7 +482,7 @@ Scope {
       implicitHeight: card.height
       color: "transparent"
       exclusionMode: ExclusionMode.Ignore
-      WlrLayershell.namespace: "ask-me-while-testing-prompt"
+      WlrLayershell.namespace: "background-worker-talk-to-me-prompt"
       WlrLayershell.layer: WlrLayer.Overlay
       WlrLayershell.keyboardFocus: root.promptOpen && owner ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
