@@ -31,6 +31,8 @@ guessing from screenshots.
 4. ALWAYS finish with `htm end`, also when you fail or give up (use a shell `trap` or
    `htm end` in your cleanup). Never leave the TESTING banner up.
 
+**Experimental: a question outside a testing session.** When you are blocked on a decision only the human can make (which of two options, "ok to continue?") and a wrong guess would be costly, `htm question "Which one: A or B?"` (add `--text` for a typed answer) shows a plain question card with no banner and prints `yes`, `no`, `unsure`, `text:<reply>`, `dismissed`, `timeout` or `busy`. It is OFF unless the human ran `htm settings set questions on`: if it prints `disabled` (exit code 6), do not retry, use your normal way of asking. Exit code 6 also means you asked too soon after the last one (`question-gap`). Do not use it for things you can decide or look up yourself, batch several decisions into one question, and never in a loop. `dismissed` (exit 4) = the human does not want to be asked now: decide yourself or carry on with another part of the task and say what you assumed.
+
 Rules: one question per `htm ask`, yes/no phrasing unless you really need words (`--text`), under 100 characters. Do not ask
 when nothing visible changed. Do not use `htm` for headless or non-visual work.
 If `htm` is not installed (`command -v htm`), skip this section and say so in your report.

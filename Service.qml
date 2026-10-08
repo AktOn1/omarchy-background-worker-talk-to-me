@@ -7,6 +7,8 @@
 // IPC (target "htm"; the `htm` command wraps these and polls the result files):
 //   start <id> <label> <countdownSec> <maxMinutes>   countdown, result file: human | solo | cancelled | postpone:<min>
 //   ask <id> <question> <timeoutSec> <choice|text>   result file: yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
+//   quick <id> <question> <timeoutSec> <choice|text>  (experimental) like ask, but also works with no session: a plain
+//                                                question card, no banner. result file adds: busy | dismissed
 //   say <text> | end | cancel <id> | status | ping
 // Result files: $XDG_RUNTIME_DIR/htm/<id>.result (the id is validated, no paths from callers).
 
@@ -64,6 +66,8 @@ Scope {
   signal focusRequested()
 
   readonly property bool promptOpen: phase === "countdown" || askId !== ""
+  // a question card with no testing session behind it (htm question)
+  readonly property bool standalone: phase === "idle" && askId !== ""
   readonly property string promptKind: phase === "countdown" ? "countdown" : "ask"
 
   readonly property var focusedScreen: {
@@ -102,6 +106,7 @@ Scope {
     if (!cid) return "error:bad id"
     if (root.runtimeBase === "") return "error:no XDG_RUNTIME_DIR"
     if (root.phase !== "idle") root.endSession("cancelled", "ended")
+    else if (root.askId !== "") root.answer("superseded")
     root.label = Model.cleanText(rawLabel, 60) || "Desktop testing"
     root.startId = cid
     root.countdownTotal = Model.clampInt(rawCountdown, 1, 30, Model.DEFAULTS.countdown)
@@ -163,6 +168,26 @@ Scope {
     return "ok"
   }
 
+  function quickQuestion(id, rawQuestion, rawTimeout, rawKind) {
+    const cid = Model.cleanId(id)
+    if (!cid) return "error:bad id"
+    if (root.runtimeBase === "") return "error:no XDG_RUNTIME_DIR"
+    if (root.phase === "active") return root.askQuestion(id, rawQuestion, rawTimeout, rawKind)
+    if (root.phase !== "idle" || root.askId !== "") {
+      root.writeResult(cid, "busy")
+      return "ok"
+    }
+    const kind = Model.askKind(rawKind)
+    root.question = Model.cleanText(rawQuestion, 160) || "?"
+    root.askTotal = Model.clampInt(rawTimeout, 3, 600, kind === "text" ? Model.DEFAULTS.textTimeout : Model.DEFAULTS.askTimeout)
+    root.askLeft = root.askTotal
+    root.typeOnly = kind === "text"
+    root.typing = root.typeOnly
+    root.askId = cid
+    ticker.restart()
+    return "ok"
+  }
+
   function answer(result) {
     if (root.askId === "") return
     root.writeResult(root.askId, result)
@@ -180,6 +205,7 @@ Scope {
   }
 
   function openPostpone() {
+    if (root.standalone) return
     if (root.phase === "countdown") {
       root.countdownTypeLeft = 60
       root.typing = true
@@ -213,7 +239,10 @@ Scope {
     if (root.postponing) {
       root.postponing = false
       if (!root.typeOnly) root.typing = false
-    } else if (root.typeOnly) root.endSession("cancelled", "ended")
+    } else if (root.typeOnly) {
+      if (root.standalone) root.answer("dismissed")
+      else root.endSession("cancelled", "ended")
+    }
     else root.typing = false
   }
 
@@ -295,7 +324,10 @@ Scope {
   }
 
   function act(action) {
-    if (action === "end") root.endSession("cancelled", "ended")
+    if (action === "end") {
+      if (root.standalone) root.answer("dismissed")
+      else root.endSession("cancelled", "ended")
+    }
     else if (action === "type") root.openTyping()
     else if (action === "postpone") root.openPostpone()
     else if (action === "send") root.submitText(root.replyText)
@@ -309,6 +341,7 @@ Scope {
     interval: 1000
     repeat: true
     onTriggered: {
+      if (root.phase === "idle" && root.askId === "") { ticker.stop(); return }
       if (root.held && root.promptOpen) {
         root.sessionEnd += 1000
         root.holdLeft -= 1
@@ -346,6 +379,7 @@ Scope {
     target: "htm"
     function start(id: string, label: string, countdown: string, maxMinutes: string): string { return root.startSession(id, label, countdown, maxMinutes) }
     function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
+    function quick(id: string, question: string, timeout: string, kind: string): string { return root.quickQuestion(id, question, timeout, kind) }
     function say(text: string): string { return root.say(text) }
     function end(): string { root.endSession("cancelled", "ended"); return "ok" }
     function cancel(id: string): string { return root.cancel(id) }
@@ -614,8 +648,10 @@ Scope {
                 : root.postponing
                   ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
                 : root.typing
-                  ? [ { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? "stop test" : "back", action: "esc" } ]
-                  : [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "T", text: "type reply", action: "type" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "stop test", action: "end" } ]
+                  ? (root.standalone ? [ { key: "Enter", text: "send", action: "send" }, { key: "Esc", text: root.typeOnly ? "dismiss" : "back", action: "esc" } ] : [ { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? "stop test" : "back", action: "esc" } ])
+                  : root.standalone
+                    ? [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "T", text: "type reply", action: "type" }, { key: "Esc", text: "dismiss", action: "end" } ]
+                    : [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "T", text: "type reply", action: "type" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "stop test", action: "end" } ]
 
               Rectangle {
                 required property var modelData

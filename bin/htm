@@ -2,6 +2,7 @@
 # htm: command line for the Ask Me While Testing Omarchy shell plugin.
 # Usage: htm start [LABEL] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
 #        htm ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
+#        htm question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
 #        htm say "TEXT"
 #        htm end
 #        htm status
@@ -26,6 +27,23 @@ htm: Ask Me While Testing
       Prints yes | no | unsure | text:<typed answer> | postpone:<min> | timeout | ended.
       "timeout" is printed at once in solo mode. "ended" = the person pressed Esc:
       stop testing. Exit codes: 0 answered, 1 error, 3 no session (run htm start), 4 ended, 5 postponed.
+  htm question "QUESTION" [--text] [--timeout SEC]      (EXPERIMENTAL, off by default)
+      A plain question card with no testing session and no banner, for a decision you are
+      blocked on while the person works in another app. Y / N / ? / T (type) answer, Esc dismisses.
+      Prints yes | no | unsure | text:<typed> | dismissed | timeout | busy.
+      Exit codes: 0 answered, 4 dismissed, 6 not allowed (setting is off, or asked too soon after
+      the last question): decide yourself or use your normal question channel.
+      Turn it on with: htm settings set questions on
+  htm settings [get KEY | set KEY VALUE | reset [KEY]]
+      Show or change the settings (stored in ~/.config/ask-me-while-testing/settings.conf).
+        questions         on|off   allow "htm question" (default off, experimental)
+        question-timeout  SEC      how long a question card stays (default 120, 3-600)
+        question-gap      SEC      minimum seconds between two questions (default 60, 0-3600)
+        countdown         SEC      default start countdown (default 5, 1-30)
+        max               MIN      default session limit (default 20, 1-240)
+        ask-timeout       SEC      default for htm ask (default 60, 3-600)
+        text-timeout      SEC      default for htm ask --text (default 120, 3-600)
+      Command-line options (--countdown, --max, --timeout) still win over settings.
   htm say "TEXT"      Short status line on the banner (no answer needed).
   htm end             Remove the banner and finish the session.
   htm status          Print the session state as JSON.
@@ -60,6 +78,78 @@ call() {
   esac
 }
 
+CONF_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ask-me-while-testing/settings.conf"
+SETTING_KEYS="questions question-timeout question-gap countdown max ask-timeout text-timeout"
+
+setting_default() {
+  case $1 in
+    questions) echo off ;;
+    question-timeout) echo 120 ;;
+    question-gap) echo 60 ;;
+    countdown) echo 5 ;;
+    max) echo 20 ;;
+    ask-timeout) echo 60 ;;
+    text-timeout) echo 120 ;;
+    *) return 1 ;;
+  esac
+}
+
+setting_range() {
+  case $1 in
+    question-timeout|ask-timeout|text-timeout) echo "3 600" ;;
+    question-gap) echo "0 3600" ;;
+    countdown) echo "1 30" ;;
+    max) echo "1 240" ;;
+  esac
+}
+
+# Prints the stored value, or the default.
+setting_get() {
+  local key=$1 line value=""
+  if [[ -r $CONF_FILE ]]; then
+    line=$(grep -m1 "^$key=" "$CONF_FILE" 2>/dev/null || true)
+    value=${line#*=}
+  fi
+  if [[ -z $value ]]; then setting_default "$key"; return; fi
+  if [[ $key == questions ]]; then
+    case $value in on|off) echo "$value" ;; *) setting_default "$key" ;; esac
+  elif [[ $value =~ ^[0-9]+$ ]]; then echo "$value"
+  else setting_default "$key"; fi
+}
+
+setting_valid_key() { [[ " $SETTING_KEYS " == *" $1 "* ]]; }
+
+setting_validate() {
+  local key=$1 value=$2 lo hi
+  if [[ $key == questions ]]; then
+    [[ $value == on || $value == off ]] || die "questions takes on or off"
+    return
+  fi
+  [[ $value =~ ^[0-9]+$ ]] || die "$key takes a whole number"
+  read -r lo hi <<<"$(setting_range "$key")"
+  (( value >= lo && value <= hi )) || die "$key must be between $lo and $hi"
+}
+
+setting_set() {
+  local key=$1 value=$2 tmp
+  setting_valid_key "$key" || die "unknown setting '$key' (htm settings lists them)"
+  setting_validate "$key" "$value"
+  mkdir -p "${CONF_FILE%/*}"
+  tmp=$(mktemp "$CONF_FILE.XXXXXX")
+  { [[ -r $CONF_FILE ]] && grep -v "^$key=" "$CONF_FILE"; echo "$key=$value"; } > "$tmp" 2>/dev/null || echo "$key=$value" > "$tmp"
+  mv "$tmp" "$CONF_FILE"
+}
+
+setting_reset() {
+  local key=$1 tmp
+  [[ -r $CONF_FILE ]] || return 0
+  if [[ -z $key ]]; then rm -f "$CONF_FILE"; return 0; fi
+  setting_valid_key "$key" || die "unknown setting '$key' (htm settings lists them)"
+  tmp=$(mktemp "$CONF_FILE.XXXXXX")
+  grep -v "^$key=" "$CONF_FILE" > "$tmp" || true
+  mv "$tmp" "$CONF_FILE"
+}
+
 new_id() { head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 
 cleanup() {
@@ -92,7 +182,7 @@ case $cmd in
   -h|--help|help) usage ;;
 
   start)
-    label="" countdown=5 max=20
+    label="" countdown=$(setting_get countdown) max=$(setting_get max)
     while (( $# )); do
       case $1 in
         --countdown) countdown=${2:?--countdown needs seconds}; shift 2 ;;
@@ -124,7 +214,9 @@ case $cmd in
       esac
     done
     [[ -n $question ]] || die 'usage: htm ask "QUESTION" [--text] [--timeout SEC]'
-    if [[ -z $timeout ]]; then timeout=60; [[ $kind == text ]] && timeout=120; fi
+    if [[ -z $timeout ]]; then
+      if [[ $kind == text ]]; then timeout=$(setting_get text-timeout); else timeout=$(setting_get ask-timeout); fi
+    fi
     [[ $timeout =~ ^[0-9]+$ ]] || die "--timeout takes whole seconds"
     mkdir -p -m 700 "$RUNTIME_DIR"
     ID=$(new_id)
@@ -141,6 +233,80 @@ case $cmd in
       superseded) echo timeout ;;
       postpone:*) echo "$result"; exit 5 ;;
       *) echo "$result" ;;
+    esac
+    ;;
+
+  question)
+    question="" timeout="" kind=choice
+    while (( $# )); do
+      case $1 in
+        --timeout) timeout=${2:?--timeout needs seconds}; shift 2 ;;
+        --text) kind=text; shift ;;
+        *) question=$1; shift ;;
+      esac
+    done
+    [[ -n $question ]] || die 'usage: htm question "QUESTION" [--text] [--timeout SEC]'
+    if [[ $(setting_get questions) != on ]]; then
+      echo "disabled"
+      echo "htm: standalone questions are off (experimental). The person can turn them on with: htm settings set questions on" >&2
+      exit 6
+    fi
+    [[ -n $timeout ]] || timeout=$(setting_get question-timeout)
+    [[ $timeout =~ ^[0-9]+$ ]] || die "--timeout takes whole seconds"
+    mkdir -p -m 700 "$RUNTIME_DIR"
+    stamp="$RUNTIME_DIR/last-question"
+    gap=$(setting_get question-gap)
+    if [[ -r $stamp ]]; then
+      last=$(cat "$stamp" 2>/dev/null); last=${last:-0}
+      now=$(date +%s)
+      if [[ $last =~ ^[0-9]+$ ]] && (( now - last < gap )); then
+        echo "toosoon"
+        echo "htm: last question was $((now - last)) s ago (question-gap is $gap s). Decide yourself or batch your questions." >&2
+        exit 6
+      fi
+    fi
+    ID=$(new_id)
+    trap on_signal INT TERM
+    trap cleanup EXIT
+    call quick "$ID" "$question" "$timeout" "$kind" >/dev/null
+    date +%s > "$stamp"
+    grace=8
+    [[ $kind == choice ]] && grace=98
+    grace=$((grace + 125))
+    result=$(wait_result $((timeout + grace))) || { ipc cancel "$ID" >/dev/null 2>&1; result=timeout; }
+    case $result in
+      dismissed) echo dismissed; exit 4 ;;
+      superseded|ended|postpone:*) echo timeout ;;
+      busy) echo busy; echo "htm: another card is on screen right now" >&2; exit 6 ;;
+      *) echo "$result" ;;
+    esac
+    ;;
+
+  settings)
+    sub=${1:-list}
+    case $sub in
+      list|"")
+        for key in $SETTING_KEYS; do
+          value=$(setting_get "$key")
+          mark=""; [[ $value == "$(setting_default "$key")" ]] || mark="  (default $(setting_default "$key"))"
+          printf '%-17s %s%s\n' "$key" "$value" "$mark"
+        done
+        ;;
+      get)
+        [[ $# -ge 2 ]] || die "usage: htm settings get KEY"
+        setting_valid_key "$2" || die "unknown setting '$2'"
+        setting_get "$2"
+        ;;
+      set)
+        [[ $# -ge 3 ]] || die "usage: htm settings set KEY VALUE"
+        setting_set "$2" "$3"
+        echo "$2=$(setting_get "$2")"
+        ;;
+      reset)
+        setting_reset "${2:-}"
+        echo "reset"
+        ;;
+      *) die "usage: htm settings [get KEY | set KEY VALUE | reset [KEY]]" ;;
     esac
     ;;
 

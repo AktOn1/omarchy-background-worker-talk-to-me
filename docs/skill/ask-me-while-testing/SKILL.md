@@ -33,6 +33,15 @@ visual result was not human-confirmed.
 4. `htm end` at the very end, also on failure. Prefer
    `trap 'htm end' EXIT` in scripts so the banner never stays up.
 
+## Experimental: ask outside a testing session
+`htm question "Which one: A or B?" [--text]` pops up a plain question card (no TESTING banner, no `htm start`
+needed) for a decision you are blocked on while the human works in another app. Prints `yes` | `no` |
+`unsure` | `text:<reply>` | `dismissed` (exit 4) | `timeout` | `busy` (exit 6). It is OFF by default
+(the human enables it with `htm settings set questions on`). On `disabled` (exit 6) do not retry: use your
+normal way of asking. Exit 6 also means "too soon after the last question" (`question-gap`). Use it only when
+blocked and a wrong guess is costly; batch decisions, never loop. On `dismissed`/`timeout` decide yourself and
+say what you assumed. Settings: `htm settings`.
+
 ## Good questions
 - "Did the window move from left to right?" (yes/no, one thing)
 - "Is the bar now on the left edge?"

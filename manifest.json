@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.akton1.ask-me-while-testing",
   "name": "Ask Me While Testing",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "AktOn1",
   "license": "MIT",
   "description": "Lets a script or AI agent that changes your desktop ask you quick yes/no questions. A countdown, a TESTING banner while it works, and one-key answers (Y, N, ?) or a typed reply returned to the command line.",

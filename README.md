@@ -10,7 +10,8 @@ Omarchy shell plugin that lets a script or AI agent that changes your desktop (m
 
 2. **TESTING banner.** For the whole session a small always-on-top banner shows "TESTING in progress", the title, the mode and the time left. It never takes the keyboard. Click it to end the session.
 3. **Questions.** `htm ask "Did the window move from left to right?"` shows the question. Press **Y** / **N**, or **?** for "can't tell", or **T** to type a reply in a textbox (Enter sends, Esc goes back), or **P** to postpone the test: type the minutes, the banner turns into a "Testing paused, resumes in M:SS" pill and the agent gets `postpone:<minutes>` (exit code 5), stops, and restarts the test after that time. In a `--text` box postponing is **Ctrl+P**. For an open question use `htm ask "What do you see?" --text`: the textbox opens at once. The command prints `yes`, `no`, `unsure`, `text:<what you typed>` or `timeout` and exits.
-4. **Stop.** `htm end` removes the banner. Safety nets: Esc on a question ends the session (Esc in the textbox opened with T only goes back; with `--text` it ends the session) (`ask` prints `ended`), the session has a hard time limit (default 20 min), a killed `htm ask` withdraws its question.
+4. **Experimental: a question without a test.** `htm question "Which one, A or B?"` shows a plain question card (Y / N / ? / T, Esc dismisses) with no TESTING banner and no countdown, so an agent that is stuck on a decision can ask you while you work in another app. It is **off** until you run `htm settings set questions on`. Agents are told to use it only when blocked and a wrong guess is costly; `question-gap` (default 60 s) refuses a second question too soon. Esc prints `dismissed`; P (postpone) does not exist here.
+5. **Stop.** `htm end` removes the banner. Safety nets: Esc on a question ends the session (Esc in the textbox opened with T only goes back; with `--text` it ends the session) (`ask` prints `ended`), the session has a hard time limit (default 20 min), a killed `htm ask` withdraws its question.
 
 The keyboard is grabbed only while the countdown card or a question (including its textbox) is on screen (the countdown needs it to hear Y). The rest of the time you type into your own windows as usual.
 
@@ -18,12 +19,27 @@ The keyboard is grabbed only while the countdown card or a question (including i
 ```
 htm start [TITLE] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 5 s, 20 min)
 htm ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended  (default 60 s, 120 s with --text)
+htm question "QUESTION" [--text] [--timeout SEC]   EXPERIMENTAL, off by default -> yes | no | unsure | text:<typed> | dismissed | timeout | busy | disabled | toosoon  (default 120 s)
+htm settings [get KEY | set KEY VALUE | reset [KEY]]   list or change settings
 htm say "TEXT"                                     status line on the banner for 8 s, no answer
 htm end                                            end the session
 htm status                                         JSON: phase, mode, title, question, seconds left
 ```
-Exit codes: 0 ok, 1 error (shell not running, plugin not loaded), 3 no session, 4 you pressed Esc (`cancelled` / `ended`), 5 you pressed P (`postpone:<min>`).
+Exit codes: 0 ok, 1 error (shell not running, plugin not loaded), 3 no session, 4 you pressed Esc (`cancelled` / `ended` / `dismissed`), 5 you pressed P (`postpone:<min>`), 6 `htm question` not allowed (`disabled`, `toosoon` or `busy`).
 In solo mode `htm ask` prints `timeout` at once (nobody is there to answer). Only one question at a time; a new one replaces the old.
+
+## Settings (command line)
+Stored in `~/.config/ask-me-while-testing/settings.conf` (plain `key=value`). `htm settings` lists them, `htm settings set KEY VALUE` changes one, `htm settings reset [KEY]` goes back to the defaults. Options on the command line (`--countdown`, `--max`, `--timeout`) always win.
+
+| Key | Values | Default | What |
+|---|---|---|---|
+| `questions` | `on` / `off` | `off` | allow `htm question` (experimental) |
+| `question-timeout` | 3-600 s | 120 | how long a question card stays |
+| `question-gap` | 0-3600 s | 60 | minimum time between two questions |
+| `countdown` | 1-30 s | 5 | start countdown |
+| `max` | 1-240 min | 20 | session time limit |
+| `ask-timeout` | 3-600 s | 60 | `htm ask` |
+| `text-timeout` | 3-600 s | 120 | `htm ask --text` |
 
 ## Install
 ```
