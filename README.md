@@ -51,6 +51,16 @@ Requires `omarchy-shell` running. No network, no sudo, no changes to your config
 ## Try it with an agent
 Open an agent (`omarchy agent`, Claude Code, ...) with the instructions installed (see "For agents") and paste one of these. Each one exercises a different feature.
 
+### One block for everything
+No mention of the plugin or `htm`. The task itself makes the agent touch the desktop (guard, countdown, banner), need a human eye (yes/no/unsure), ask for an opinion (typed reply) and choose between options (standalone question, if enabled):
+
+```
+Do a small desktop demo for me. Move this terminal to workspace 3, make it float, then put it back. Then try three window opacity values (0.8, 0.9, 1.0) on this terminal and tell me which looks best. Don't judge from screenshots: I would rather you check with me what I actually see, and ask me in my own words what I think of each one. At the end, if you are torn between two layouts for the result, ask me which I want instead of guessing.
+```
+
+While it runs, try **P** (postpone) at the first countdown, **Ctrl** (freeze the timer), **T** (type a reply) and **Esc** (stop). For the last step to use a popup, run `htm settings set questions on` first.
+
+### One feature at a time
 | Feature | Paste this |
 |---|---|
 | Whole flow | `Test the Ask Me While Testing plugin: htm start "plugin demo", then move this terminal to workspace 3 and ask me with htm ask whether I saw it, then ask me an open question with --text what I see, then htm end.` |
