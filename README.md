@@ -48,6 +48,20 @@ ln -s ~/.config/omarchy/plugins/io.github.akton1.ask-me-while-testing/bin/htm ~/
 ```
 Requires `omarchy-shell` running. No network, no sudo, no changes to your config. State: short-lived result files in `$XDG_RUNTIME_DIR/htm/` (removed by `htm`, gone at logout).
 
+## Try it with an agent
+Open an agent (`omarchy agent`, Claude Code, ...) with the instructions installed (see "For agents") and paste one of these. Each one exercises a different feature.
+
+| Feature | Paste this |
+|---|---|
+| Whole flow | `Test the Ask Me While Testing plugin: htm start "plugin demo", then move this terminal to workspace 3 and ask me with htm ask whether I saw it, then ask me an open question with --text what I see, then htm end.` |
+| Hands-off guard (no mention of htm) | `Move this terminal to workspace 3, make it float, then put it back.` Expect: a block message, then the countdown and the TESTING banner. |
+| Open question | `Run htm start "demo", then htm ask "What do you see on screen?" --text, repeat my answer back to me, then htm end.` |
+| Postpone | `Run htm start "demo". If I postpone, wait that long and start again. Then ask me one yes/no question with htm ask and htm end.` Press **P** and a number of minutes. |
+| Cancel | `Run htm start "demo" and tell me what it printed.` Press **Esc**; the agent should say `cancelled` and touch nothing. |
+| Question without a test (experimental) | First `htm settings set questions on` and restart the shell once. Then: `Use htm question to ask me whether to continue, A or B, and do what I answer. Do not run htm start.` |
+
+Tips while testing: tap **Ctrl alone** to freeze a timer, **T** types a reply, **Esc** stops. `htm status` shows the current state.
+
 ## Remove
 ```
 omarchy plugin disable io.github.akton1.ask-me-while-testing && omarchy plugin remove io.github.akton1.ask-me-while-testing
