@@ -2,7 +2,7 @@
 
 <a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
-Omarchy shell plugin that lets a script or AI agent that changes your desktop (moving windows, workspaces, the bar, animations) ask you quick yes/no questions, instead of slow screenshot loops. Origin: AKT-460 / AKT-463.
+Omarchy shell plugin that lets a script or AI agent that changes your desktop (moving windows, workspaces, the bar, animations) ask you quick yes/no questions, instead of slow screenshot loops.
 
 ## The flow
 1. **Countdown.** `talk-to-me start "Desktop testing"` shows a card "Desktop testing is about to start 5 4 3 2 1". It is a heads-up, not a question: if you are at the desk and not ready, press **P** or **Esc**; if you are away, it runs out and the agent continues alone. **Y** exists only when the agent asks for help with `talk-to-me start "title" --help "watch the screen and press Y/N after each window move"`: the card then says "Faster with your help: …" and Y = "I'll help" (human mode, `talk-to-me ask` works). **P** = postpone: type the minutes, Enter sends; the countdown waits while you type, the banner turns into a blue "Testing paused, resumes in M:SS" pill and `talk-to-me start` prints `postpone:<minutes>` (exit code 5). **Esc** = cancel (`cancelled`, exit 4: not now, the agent stops). No key = the agent goes on alone (solo mode; `talk-to-me ask` then prints `timeout` at once, so an agent that wants answers must pass `--help`).
@@ -43,7 +43,7 @@ Stored in `~/.config/background-worker-talk-to-me/settings.conf` (plain `key=val
 
 ## Install
 ```
-omarchy plugin add <repo url> --enable        # or copy this folder to ~/.config/omarchy/plugins/io.github.akton1.background-worker-talk-to-me/
+omarchy plugin add https://github.com/AktOn1/omarchy-background-worker-talk-to-me.git --enable        # or copy this folder to ~/.config/omarchy/plugins/io.github.akton1.background-worker-talk-to-me/
 ln -s ~/.config/omarchy/plugins/io.github.akton1.background-worker-talk-to-me/bin/talk-to-me ~/.local/bin/talk-to-me
 ```
 Requires `omarchy-shell` running. No network, no sudo, no changes to your config. State: short-lived result files in `$XDG_RUNTIME_DIR/talk-to-me/` (removed by `talk-to-me`, gone at logout).
@@ -92,7 +92,7 @@ Opt-in only. One command sets it up: `bin/talk-to-me-install-agent all ~/.claude
 Two layers, both set up by `talk-to-me-install-agent guard`:
 
 1. **Claude Code hook (main layer).** `bin/talk-to-me-guard-hook` is added to `~/.claude/settings.json` as a `PreToolUse` hook on `Bash|AskUserQuestion`. While a session is open it also blocks the AskUserQuestion tool, so the agent has to ask on screen with `talk-to-me ask` instead of in the terminal. For Bash it looks at the command text and blocks (the agent sees the message) `wtype`, `ydotool`, `dotool`, `omarchy-restart-shell` and `hyprctl dispatch|reload|keyword` unless an `talk-to-me start` session is active. It does not depend on `PATH` order, so absolute paths are caught too. A backup is kept as `settings.json.talk-to-me-backup`; `guard-remove` takes the hook out again.
-2. **PATH shims.** `bin/talk-to-me-guard` is symlinked as `wtype`, `omarchy-restart-shell` and `hyprctl` in `~/.local/bin`; inside an agent run (`CLAUDECODE`, `PAPERCLIP_RUN_ID`, or `TALK_TO_ME_GUARD=1` for any other agent) they exit 99 until a session is active. **Caveat:** Omarchy appends `~/.local/bin` *after* `/usr/bin` in the desktop session `PATH`, so these shims only fire where `~/.local/bin` comes first (e.g. Paperclip runs). In a normal `omarchy agent` terminal layer 1 does the work.
+2. **PATH shims.** `bin/talk-to-me-guard` is symlinked as `wtype`, `omarchy-restart-shell` and `hyprctl` in `~/.local/bin`; inside an agent run (`CLAUDECODE`, `PAPERCLIP_RUN_ID`, or `TALK_TO_ME_GUARD=1` for any other agent) they exit 99 until a session is active. **Caveat:** Omarchy appends `~/.local/bin` *after* `/usr/bin` in the desktop session `PATH`, so these shims only fire where `~/.local/bin` comes first. In a normal `omarchy agent` terminal layer 1 does the work.
 
 `TALK_TO_ME_GUARD_OFF=1` bypasses both layers. The hook only covers Claude Code; other agents rely on the shims plus the instruction block.
 

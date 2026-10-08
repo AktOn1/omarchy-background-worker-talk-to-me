@@ -27,7 +27,7 @@ if (( touches && in_agent )) && [[ -z ${TALK_TO_ME_GUARD_OFF:-} ]]; then
   state=$("$(dirname "$self")/talk-to-me" status 2>/dev/null)
   if [[ $state != *'"phase":"active"'* ]]; then
     cat >&2 <<MSG
-$name blocked: this touches Libor's live desktop and no Background Worker Talk To Me session is active.
+$name blocked: this touches the user's live desktop and no Background Worker Talk To Me session is active.
 Run:  talk-to-me start "<your name>: <what you will do>"   (5 s countdown + TESTING banner)
 Then repeat this command, and finish with:  talk-to-me end
 If talk-to-me start prints "cancelled" or "postpone:<min>": touch nothing, do other work, retry later.

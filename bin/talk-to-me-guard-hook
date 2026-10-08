@@ -25,12 +25,12 @@ if tool == "AskUserQuestion":
     if st.get("phase") != "active":
         sys.exit(0)
     sys.stderr.write(
-        "Blocked: a Background Worker Talk To Me session is active, so ask Libor on screen, not in this terminal.\n"
+        "Blocked: a Background Worker Talk To Me session is active, so ask the user on screen, not in this terminal.\n"
         'Yes/no/unsure: talk-to-me ask "Did the window move?"    Open question (he types): talk-to-me ask "What do you see?" --text\n'
         + ("Mode is solo (nobody offered help), so talk-to-me ask would print timeout. Run talk-to-me end, then restart with a help offer:\n"
            '  talk-to-me start "<name>: <what>" --help "watch the screen and press Y/N after each change"\n'
            "then use talk-to-me ask. " if st.get("mode") == "solo" else "")
-        + "If Libor presses Esc or P (postpone), stop touching the desktop; the terminal is the fallback only after the session ends.\n")
+        + "If the user presses Esc or P (postpone), stop touching the desktop; the terminal is the fallback only after the session ends.\n")
     sys.exit(2)
 
 # a desktop-touching tool in command position (start, or after ; & | ( ` $( { sudo/env/assignments)
@@ -43,9 +43,9 @@ if session_state().get("phase") == "active":
     sys.exit(0)
 
 sys.stderr.write(
-    "Blocked: this command touches Libor's live desktop and no Background Worker Talk To Me session is active.\n"
+    "Blocked: this command touches the user's live desktop and no Background Worker Talk To Me session is active.\n"
     'Run:  talk-to-me start "<your name>: <what you will do>" --help "watch the screen and press Y/N after each change"\n'
-    "(5 s countdown + TESTING banner; --help adds a Y key so Libor can offer to answer your questions. Drop --help only for hands-off work with no visual questions.)\n"
+    "(5 s countdown + TESTING banner; --help adds a Y key so the user can offer to answer your questions. Drop --help only for hands-off work with no visual questions.)\n"
     "Then repeat the command. After EACH visible change ask on screen, never in this terminal:  talk-to-me ask \"Did X happen?\"  (yes/no/unsure; --text for open questions)\n"
     "Finish with:  talk-to-me end\n"
     'If talk-to-me start prints "cancelled" or "postpone:<min>": touch nothing, do other work, retry later.\n'

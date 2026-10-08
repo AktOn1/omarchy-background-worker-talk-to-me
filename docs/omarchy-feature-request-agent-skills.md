@@ -1,6 +1,6 @@
 # Draft feature request: plugins can ship agent skills (DRAFT, not posted)
 
-Target: Omarchy (basecamp/omarchy) issue/discussion. Written for Libor to review; nothing has been sent.
+Target: Omarchy (basecamp/omarchy) issue/discussion. Draft; not yet sent.
 
 ## Title
 Let Omarchy plugins ship skills for coding agents
