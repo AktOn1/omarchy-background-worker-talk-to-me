@@ -6,6 +6,7 @@
 #        talk-to-me say "TEXT"
 #        talk-to-me end
 #        talk-to-me status
+#        talk-to-me require [WHAT]    -> exit 0 ok, 99 = agent run with no active session (put it in launcher scripts)
 set -u
 
 usage() {
@@ -52,6 +53,9 @@ talk-to-me: Background Worker Talk To Me
   talk-to-me say "TEXT"      Short status line on the banner (no answer needed).
   talk-to-me end             Remove the banner and finish the session.
   talk-to-me status          Print the session state as JSON.
+  talk-to-me require [WHAT]  For launcher scripts that open a window (a game, an app): exits 0 when it is fine
+      to go on, 99 (with a message) when an agent run (CLAUDECODE, PAPERCLIP_RUN_ID or TALK_TO_ME_GUARD=1)
+      has no active session. Always 0 for a person at a terminal or with TALK_TO_ME_GUARD_OFF=1.
 
 Environment: TALK_TO_ME_QS_PATH=<dir> talks to a scratch Quickshell config instead of omarchy-shell.
 USAGE
@@ -327,6 +331,21 @@ case $cmd in
 
   status)
     call status
+    ;;
+
+  require)
+    [[ -n ${PAPERCLIP_RUN_ID:-} || -n ${CLAUDECODE:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] || exit 0
+    [[ -z ${TALK_TO_ME_GUARD_OFF:-} ]] || exit 0
+    [[ $("$0" status 2>/dev/null) == *'"phase":"active"'* ]] && exit 0
+    cat >&2 <<MSG
+Blocked: ${1:-this} opens a window on the user's live desktop and no Background Worker Talk To Me session is active.
+Run:  talk-to-me start "<your name>: <what you will do>" --help "watch the screen and press Y/N after each change"
+(5 s countdown + TESTING banner, so the user keeps mouse and keyboard to themselves). Then repeat this command,
+and finish with:  talk-to-me end
+If talk-to-me start prints "cancelled" or "postpone:<min>": touch nothing, do other work, retry later.
+Headless runs (no window) need no session. The human can set TALK_TO_ME_GUARD_OFF=1.
+MSG
+    exit 99
     ;;
 
   *) usage; exit 1 ;;

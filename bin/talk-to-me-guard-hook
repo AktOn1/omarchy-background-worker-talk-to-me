@@ -36,7 +36,10 @@ if tool == "AskUserQuestion":
 # a desktop-touching tool in command position (start, or after ; & | ( ` $( { sudo/env/assignments)
 pre = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:sudo|env|exec|command|nohup|setsid|time)\s+|\w+=\S*\s+)*(?:\S*/)?'
 touch = re.compile(pre + r'(?:wtype|ydotool|dotool|dotoolc|omarchy-restart-shell|hyprctl\s+(?:-\S+\s+)*(?:dispatch|reload|keyword))(?:\s|$|;|&|\|)', re.M)
-if not touch.search(cmd):
+# windowed launches: Godot binaries and play.sh (unless headless), xdg-open, gtk-launch, omarchy-launch-*
+win = re.compile(pre + r'(?:(?:\S*godot\S*|xdg-open|gtk-launch|omarchy-launch-\S+)|[\w./-]*play\.sh)(?:\s|$|;|&|\|)', re.M | re.I)
+headless = re.search(r'--headless|--help|--version|\s-h(?:\s|$)', cmd)
+if not (touch.search(cmd) or (win.search(cmd) and not headless)):
     sys.exit(0)
 
 if session_state().get("phase") == "active":
