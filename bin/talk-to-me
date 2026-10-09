@@ -15,7 +15,7 @@ usage() {
   cat <<'USAGE'
 talk-to-me: Background Worker Talk To Me
 
-  talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN]
+  talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN] [--no-shield]
       Countdown banner (default 10 s). It is a heads-up, not a question: the person who is at the
       desk postpones (P) or cancels (Esc), otherwise it runs out and you continue alone ("solo";
       "talk-to-me ask" then prints "timeout" at once). No Y key unless you pass --help.
@@ -26,6 +26,10 @@ talk-to-me: Background Worker Talk To Me
       --estimate DUR: how long you expect to need ("90s", "3m", or a bare number = minutes). The countdown card
       shows "Expected duration" and the banner counts "about 2:10 left", then "taking longer". Always give one:
       the person decides from it whether to postpone. Without it the banner only shows the time so far.
+      Solo runs (nobody pressed Y) put an invisible MOUSE SHIELD over every screen so stray clicks cannot spoil
+      the test; the banner stays clickable and ends the test. The keyboard is not blocked (your own wtype keys
+      reach the focused window). When the person helps (Y), no shield. --no-shield: skip it, e.g. when you drive
+      the mouse yourself (ydotool).
       P = the person wants to test later: they type minutes, the banner turns into a "paused"
       pill and this prints postpone:<minutes> (exit 5). Wait that long, then run talk-to-me start again.
       Exit codes: 0 human/solo, 1 error, 4 cancelled, 5 postponed.
@@ -49,6 +53,7 @@ talk-to-me: Background Worker Talk To Me
       Show or change the settings (stored in ~/.config/background-worker-talk-to-me/settings.conf).
         questions         on|off   allow "talk-to-me question" (default off, experimental)
         watch             on|off   agent watcher: banner when any agent opens a window with no session (default on)
+        shield            on|off   invisible mouse shield over every screen during solo tests (default on)
         notice-seconds    SEC      how long that notice stays (default 12, 3-120)
         question-timeout  SEC      how long a question card stays (default 120, 3-600)
         question-gap      SEC      minimum seconds between two questions (default 60, 0-3600)
@@ -99,12 +104,13 @@ call() {
 }
 
 CONF_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/background-worker-talk-to-me/settings.conf"
-SETTING_KEYS="questions watch notice-seconds question-timeout question-gap countdown max ask-timeout text-timeout"
+SETTING_KEYS="questions watch shield notice-seconds question-timeout question-gap countdown max ask-timeout text-timeout"
 
 setting_default() {
   case $1 in
     questions) echo off ;;
     watch) echo on ;;
+    shield) echo on ;;
     notice-seconds) echo 12 ;;
     question-timeout) echo 120 ;;
     question-gap) echo 60 ;;
@@ -134,7 +140,7 @@ setting_get() {
     value=${line#*=}
   fi
   if [[ -z $value ]]; then setting_default "$key"; return; fi
-  if [[ $key == questions || $key == watch ]]; then
+  if [[ $key == questions || $key == watch || $key == shield ]]; then
     case $value in on|off) echo "$value" ;; *) setting_default "$key" ;; esac
   elif [[ $value =~ ^[0-9]+$ ]]; then echo "$value"
   else setting_default "$key"; fi
@@ -144,7 +150,7 @@ setting_valid_key() { [[ " $SETTING_KEYS " == *" $1 "* ]]; }
 
 setting_validate() {
   local key=$1 value=$2 lo hi
-  if [[ $key == questions || $key == watch ]]; then
+  if [[ $key == questions || $key == watch || $key == shield ]]; then
     [[ $value == on || $value == off ]] || die "$key takes on or off"
     return
   fi
@@ -215,13 +221,14 @@ case $cmd in
   -h|--help|help) usage ;;
 
   start)
-    label="" help="" estimate=0 countdown=$(setting_get countdown) max=$(setting_get max)
+    label="" help="" estimate=0 shield=$(setting_get shield) countdown=$(setting_get countdown) max=$(setting_get max)
     while (( $# )); do
       case $1 in
         --help) help=${2:?--help needs text}; shift 2 ;;
         --estimate) estimate=$(to_seconds "${2:?--estimate needs a duration}") || exit 1; shift 2 ;;
         --countdown) countdown=${2:?--countdown needs seconds}; shift 2 ;;
         --max) max=${2:?--max needs minutes}; shift 2 ;;
+        --no-shield) shield=off; shift ;;
         *) label=$1; shift ;;
       esac
     done
@@ -230,7 +237,7 @@ case $cmd in
     ID=$(new_id)
     trap on_signal INT TERM
     trap cleanup EXIT
-    call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" "$help" "$estimate" >/dev/null
+    call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" "$help" "$estimate" "$([[ $shield == off ]] && echo 0 || echo 1)" >/dev/null
     # typing a postpone time (P) pauses the countdown for up to 60 s
     result=$(wait_result $((countdown + 70 + 125))) || { ipc cancel "$ID" >/dev/null 2>&1; die "no answer from the plugin"; }
     echo "$result"

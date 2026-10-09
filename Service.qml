@@ -5,7 +5,7 @@
 // never takes the keyboard.
 //
 // IPC (target "talk-to-me"; the `talk-to-me` command wraps these and polls the result files):
-//   start <id> <label> <countdownSec> <maxMinutes> <help> <estimateSec>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
+//   start <id> <label> <countdownSec> <maxMinutes> <help> <estimateSec> <shield>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
 //   ask <id> <question> <timeoutSec> <choice|text>   result file: yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 //   quick <id> <question> <timeoutSec> <choice|text>  (experimental) like ask, but also works with no session: a plain
 //                                                question card, no banner. result file adds: busy | dismissed
@@ -59,6 +59,10 @@ Scope {
   property string noticeText: ""
   property double sessionEnd: 0
   property int estimateSec: 0
+  // solo tests put an invisible mouse shield over every screen (the person is not helping, so stray clicks would spoil the test)
+  property bool shieldOn: true
+  property real bannerW: 0
+  property real bannerH: 0
   property double activeStart: 0
   property int elapsedSec: 0
   property int sessionLeft: 0
@@ -113,7 +117,7 @@ Scope {
 
   // ---- session ----------------------------------------------------------------
 
-  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp, rawEstimate) {
+  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp, rawEstimate, rawShield) {
     const cid = Model.cleanId(id)
     if (!cid) return "error:bad id"
     if (root.runtimeBase === "") return "error:no XDG_RUNTIME_DIR"
@@ -128,6 +132,7 @@ Scope {
     root.sessionEnd = Date.now() + (root.countdownTotal + maxMin * 60) * 1000
     root.estimateSec = Model.clampInt(rawEstimate, 0, maxMin * 60, 0)
     root.elapsedSec = 0
+    root.shieldOn = String(rawShield) !== "0"
     root.mode = ""
     root.phase = "countdown"
     ticker.restart()
@@ -432,7 +437,7 @@ Scope {
 
   IpcHandler {
     target: "talk-to-me"
-    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string, estimate: string): string { return root.startSession(id, label, countdown, maxMinutes, help, estimate) }
+    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string, estimate: string, shield: string): string { return root.startSession(id, label, countdown, maxMinutes, help, estimate, shield) }
     function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
     function quick(id: string, question: string, timeout: string, kind: string): string { return root.quickQuestion(id, question, timeout, kind) }
     function say(text: string): string { return root.say(text) }
@@ -468,6 +473,8 @@ Scope {
         id: pill
         width: Math.max(Style.space(220), bannerCol.implicitWidth + Style.space(28))
         height: bannerCol.implicitHeight + Style.space(14)
+        onWidthChanged: root.bannerW = width
+        onHeightChanged: root.bannerH = height
         radius: Style.cornerRadius
         color: root.phase === "paused" ? Color.accent : Color.urgent
         border.width: Math.max(1, Style.space(1))
@@ -493,7 +500,7 @@ Scope {
             color: Color.background
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
-            text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo"))
+            text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : root.shieldOn ? "solo · mouse blocked" : "solo"))
           }
           Text {
             readonly property string line: Model.timeLine(root.phase, root.estimateSec, root.elapsedSec)
@@ -524,6 +531,48 @@ Scope {
           anchors.fill: parent
           cursorShape: Qt.PointingHandCursor
           onClicked: { if (root.phase === "idle") root.noticeText = ""; else root.endSession("cancelled", "ended") }
+        }
+      }
+    }
+  }
+
+  // ---- mouse shield (solo tests only; the person is not helping, so clicks must not reach the windows) ----
+  // Fully transparent so screenshots stay clean; the banner area is cut out so the banner can still end the test.
+  // The keyboard is not blocked: the agent's own key presses (wtype) go to the focused window.
+
+  Variants {
+    model: Quickshell.screens
+
+    PanelWindow {
+      id: shield
+      required property var modelData
+      screen: modelData
+      visible: root.phase === "active" && root.mode === "solo" && root.shieldOn
+      anchors { top: true; bottom: true; left: true; right: true }
+      color: "transparent"
+      exclusionMode: ExclusionMode.Ignore
+      WlrLayershell.namespace: "background-worker-talk-to-me-shield"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+      mask: Region {
+        item: shieldFill
+        Region {
+          intersection: Intersection.Subtract
+          x: Math.round((shield.width - root.bannerW) / 2)
+          y: Style.bar.sizeHorizontal + Style.gapsOut * 2
+          width: root.bannerW
+          height: root.bannerH
+        }
+      }
+
+      Item {
+        id: shieldFill
+        anchors.fill: parent
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          acceptedButtons: Qt.AllButtons
+          onWheel: wheel => wheel.accepted = true
         }
       }
     }

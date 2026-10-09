@@ -60,6 +60,8 @@ The hook (layer 2) reads the command the agent is about to run and refuses it, w
 4. **Experimental: a question without a test.** `talk-to-me question "Which one, A or B?"` shows a plain question card (Y / N / ? / T, Esc dismisses) with no TESTING banner and no countdown, so an agent that is stuck on a decision can ask you while you work in another app. It is **off** until you run `talk-to-me settings set questions on`. Agents are told to use it only when blocked and a wrong guess is costly; `question-gap` (default 60 s) refuses a second question too soon. Esc prints `dismissed`; P (postpone) does not exist here.
 5. **Stop.** `talk-to-me end` removes the banner. Safety nets: Esc on a question ends the session (Esc in the textbox opened with T only goes back; with `--text` it ends the session) (`ask` prints `ended`), the session has a hard time limit (default 20 min), a killed `talk-to-me ask` withdraws its question.
 
+**Mouse shield (solo tests).** When nobody pressed Y, the agent works alone, so stray clicks would spoil the test. An invisible, fully transparent layer then covers every screen and swallows mouse clicks and scrolling (screenshots stay clean; the banner says "solo · mouse blocked"). The banner area stays clickable, so one click on it ends the test. When you are helping (Y), the shield is off and you can click and use hotkeys anywhere. The keyboard is not blocked, because the agent's own key presses (`wtype`) go to the focused window. Turn it off with `talk-to-me settings set shield off`; an agent that drives the mouse itself (`ydotool`) passes `--no-shield`.
+
 The keyboard is grabbed only during the short start countdown (it needs it to hear P, Esc, Ctrl and Y when help was asked for). Question cards never take your keyboard or your focus: you keep clicking and typing in your own windows, and answer when you are ready by clicking a button, or by clicking the card once and then pressing Y / N / ? / T / P / Esc (click the textbox to type a reply).
 
 ## Commands
@@ -83,6 +85,7 @@ Stored in `~/.config/background-worker-talk-to-me/settings.conf` (plain `key=val
 |---|---|---|---|
 | `questions` | `on` / `off` | `off` | allow `talk-to-me question` (experimental) |
 | `watch` | `on` / `off` | `on` | agent watcher: banner when any agent opens a window with no session |
+| `shield` | `on` / `off` | `on` | invisible mouse shield over every screen during solo tests |
 | `notice-seconds` | 3-120 s | 12 | how long that banner stays |
 | `question-timeout` | 3-600 s | 120 | how long a question card stays |
 | `question-gap` | 0-3600 s | 60 | minimum time between two questions |
