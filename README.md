@@ -51,6 +51,8 @@ The hook (layer 2) reads the command the agent is about to run and refuses it, w
 
 ## The flow
 1. **Countdown.** `talk-to-me start "Desktop testing"` shows a card "Desktop testing is about to start 5 4 3 2 1". It is a heads-up, not a question: if you are at the desk and not ready, press **P** or **Esc**; if you are away, it runs out and the agent continues alone. **Y** exists only when the agent asks for help with `talk-to-me start "title" --help "watch the screen and press Y/N after each window move"`: the card then says "Faster with your help: …" and Y = "I'll help" (human mode, `talk-to-me ask` works). **P** = postpone: type the minutes, Enter sends; the countdown waits while you type, the banner turns into a blue "Testing paused, resumes in M:SS" pill and `talk-to-me start` prints `postpone:<minutes>` (exit code 5). **Esc** = cancel (`cancelled`, exit 4: not now, the agent stops). No key = the agent goes on alone (solo mode; `talk-to-me ask` then prints `timeout` at once, so an agent that wants answers must pass `--help`).
+**Easy to read.** The start card is large and spells out what is happening: a "HEADS UP" line, the title, "Do nothing and it starts alone in N s", a big number with a progress bar, and a boxed **Ctrl** line ("Tap Ctrl to pause the timer and take your time to read"; it turns into "PAUSED" while frozen, and the box can be clicked too). The countdown defaults to 10 s (`talk-to-me settings set countdown N`).
+
 **Every screen, more time to read.** The countdown and question cards show on every monitor (the keyboard goes to the card on the screen you are working on; the buttons are clickable on any of them). Tap **Ctrl alone** to freeze the countdown or question timer while you read; tap Ctrl again to continue (it resumes by itself after 120 s). Ctrl+P and other Ctrl combinations do not count. `talk-to-me` waits long enough for a hold.
 
 2. **TESTING banner.** For the whole session a small always-on-top banner shows "TESTING in progress", the title, the mode, the expected duration and the time left. It never takes the keyboard. Click it to end the session.
@@ -62,7 +64,7 @@ The keyboard is grabbed only while the countdown card or a question (including i
 
 ## Commands
 ```
-talk-to-me start [TITLE] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 5 s, 20 min)
+talk-to-me start [TITLE] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 10 s, 20 min)
 talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended  (default 60 s, 120 s with --text)
 talk-to-me question "QUESTION" [--text] [--timeout SEC]   EXPERIMENTAL, off by default -> yes | no | unsure | text:<typed> | dismissed | timeout | busy | disabled | toosoon  (default 120 s)
 talk-to-me settings [get KEY | set KEY VALUE | reset [KEY]]   list or change settings

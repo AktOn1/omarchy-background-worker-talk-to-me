@@ -16,7 +16,7 @@ switching workspaces, changing the bar, animations, window rules, layer-shell ov
 use the `talk-to-me` command so the human can see and confirm the result instead of you
 guessing from screenshots.
 
-1. Before the first visible change run `talk-to-me start "short title" --estimate 3m` (always give your honest estimate: `90s`, `3m`, or minutes; the human decides from it whether to postpone, the banner counts it down and says "taking longer" when you overrun; revise it with `talk-to-me eta 2m`). It shows a 5 second
+1. Before the first visible change run `talk-to-me start "short title" --estimate 3m` (always give your honest estimate: `90s`, `3m`, or minutes; the human decides from it whether to postpone, the banner counts it down and says "taking longer" when you overrun; revise it with `talk-to-me eta 2m`). It shows a 10 second
    countdown and a TESTING banner. The countdown is only a heads-up: a human who is there
    postpones or cancels it, otherwise it runs out and you continue alone (solo mode:
    `talk-to-me ask` prints `timeout` at once). If a human's eyes would be faster or more reliable than

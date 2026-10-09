@@ -1,7 +1,7 @@
 .pragma library
 
 var ID_RE = /^[A-Za-z0-9_-]{4,40}$/
-var DEFAULTS = { countdown: 5, askTimeout: 60, textTimeout: 120, maxMinutes: 20, sayMs: 8000, holdSec: 120, textMax: 500, postponeMax: 240 }
+var DEFAULTS = { countdown: 10, askTimeout: 60, textTimeout: 120, maxMinutes: 20, sayMs: 8000, holdSec: 120, textMax: 500, postponeMax: 240 }
 
 function cleanId(value) {
   var s = String(value || "")

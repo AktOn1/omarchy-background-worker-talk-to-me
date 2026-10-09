@@ -121,7 +121,7 @@ if session_state().get("phase") == "active":
 sys.stderr.write(
     "Blocked: this command touches the user's live desktop and no Background Worker Talk To Me session is active.\n"
     'Run:  talk-to-me start "<your name>: <what you will do>" --help "watch the screen and press Y/N after each change"\n'
-    "(5 s countdown + TESTING banner; --help adds a Y key so the user can offer to answer your questions. Drop --help only for hands-off work with no visual questions.)\n"
+    "(10 s countdown + TESTING banner; --help adds a Y key so the user can offer to answer your questions. Drop --help only for hands-off work with no visual questions.)\n"
     "Then repeat the command. After EACH visible change ask on screen, never in this terminal:  talk-to-me ask \"Did X happen?\"  (yes/no/unsure; --text for open questions)\n"
     "Finish with:  talk-to-me end\n"
     "No session is needed when the work cannot touch the user: headless, a nested compositor (give the command its own HYPRLAND_INSTANCE_SIGNATURE / WAYLAND_DISPLAY),\n"

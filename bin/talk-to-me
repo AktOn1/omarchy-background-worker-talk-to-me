@@ -16,7 +16,7 @@ usage() {
 talk-to-me: Background Worker Talk To Me
 
   talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN]
-      Countdown banner (default 5 s). It is a heads-up, not a question: the person who is at the
+      Countdown banner (default 10 s). It is a heads-up, not a question: the person who is at the
       desk postpones (P) or cancels (Esc), otherwise it runs out and you continue alone ("solo";
       "talk-to-me ask" then prints "timeout" at once). No Y key unless you pass --help.
       --help "what I need": say what the person could do that is faster than you testing alone
@@ -52,7 +52,7 @@ talk-to-me: Background Worker Talk To Me
         notice-seconds    SEC      how long that notice stays (default 12, 3-120)
         question-timeout  SEC      how long a question card stays (default 120, 3-600)
         question-gap      SEC      minimum seconds between two questions (default 60, 0-3600)
-        countdown         SEC      default start countdown (default 5, 1-30)
+        countdown         SEC      default start countdown (default 10, 1-30)
         max               MIN      default session limit (default 20, 1-240)
         ask-timeout       SEC      default for talk-to-me ask (default 60, 3-600)
         text-timeout      SEC      default for talk-to-me ask --text (default 120, 3-600)
@@ -108,7 +108,7 @@ setting_default() {
     notice-seconds) echo 12 ;;
     question-timeout) echo 120 ;;
     question-gap) echo 60 ;;
-    countdown) echo 5 ;;
+    countdown) echo 10 ;;
     max) echo 20 ;;
     ask-timeout) echo 60 ;;
     text-timeout) echo 120 ;;
@@ -382,7 +382,7 @@ case $cmd in
     cat >&2 <<MSG
 Blocked: ${1:-this} opens a window on the user's live desktop and no Background Worker Talk To Me session is active.
 Run:  talk-to-me start "<your name>: <what you will do>" --help "watch the screen and press Y/N after each change"
-(5 s countdown + TESTING banner, so the user keeps mouse and keyboard to themselves). Then repeat this command,
+(10 s countdown + TESTING banner, so the user keeps mouse and keyboard to themselves). Then repeat this command,
 and finish with:  talk-to-me end
 If talk-to-me start prints "cancelled" or "postpone:<min>": touch nothing, do other work, retry later.
 Headless runs (no window) need no session. The human can set TALK_TO_ME_GUARD_OFF=1.

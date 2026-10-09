@@ -18,7 +18,7 @@ desktop and lets you ask the human a yes/no question that they answer with Y / N
 visual result was not human-confirmed.
 
 ## Procedure
-1. `talk-to-me start "short title" --estimate 3m` before the first visible change (always give an honest `--estimate`: `90s`, `3m` or minutes; the card shows it, the banner counts it down and says "taking longer" when you overrun; revise with `talk-to-me eta 2m`) (5 s countdown, a heads-up only: the
+1. `talk-to-me start "short title" --estimate 3m` before the first visible change (always give an honest `--estimate`: `90s`, `3m` or minutes; the card shows it, the banner counts it down and says "taking longer" when you overrun; revise with `talk-to-me eta 2m`) (10 s countdown, a heads-up only: the
    human postpones or cancels it if they are at the desk, otherwise it runs out and you continue
    alone in solo mode, where `talk-to-me ask` prints `timeout` at once). To get answers, ask for help:
    `talk-to-me start "short title" --help "watch the screen and press Y/N after each window move"`; the card

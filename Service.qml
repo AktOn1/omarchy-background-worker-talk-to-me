@@ -368,6 +368,7 @@ Scope {
       if (root.standalone) root.answer("dismissed")
       else root.endSession("cancelled", "ended")
     }
+    else if (action === "hold") root.toggleHold()
     else if (action === "type") root.openTyping()
     else if (action === "postpone") root.openPostpone()
     else if (action === "send") root.submitText(root.replyText)
@@ -565,7 +566,8 @@ Scope {
 
       Rectangle {
         id: card
-        width: Math.max(Style.space(380), Math.min(Style.space(640), cardCol.implicitWidth + Style.space(40)))
+        readonly property real zoom: root.promptKind === "countdown" ? 1.35 : 1.2
+        width: Math.max(Style.space(520), Math.min(Style.space(760), cardCol.implicitWidth + Style.space(40)))
         height: cardCol.implicitHeight + Style.space(32)
         radius: Style.cornerRadius
         color: Util.alpha(Color.background, 0.97)
@@ -587,45 +589,66 @@ Scope {
           spacing: Style.space(12)
 
           Text {
+            visible: root.promptKind === "countdown"
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            textFormat: Text.PlainText
+            color: Color.accent
+            font.family: Style.font.family
+            font.pixelSize: Math.round((Style.font.body) * card.zoom)
+            font.bold: true
+            font.letterSpacing: 1
+            text: "HEADS UP: AN AGENT IS ABOUT TO TEST ON YOUR DESKTOP"
+          }
+
+          Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
             color: Color.popups.text
             font.family: Style.font.family
-            font.pixelSize: root.promptKind === "countdown" ? Style.font.title : Style.font.heading
+            font.pixelSize: Math.round((root.promptKind === "countdown" ? Style.font.title : Style.font.heading) * card.zoom)
             font.bold: true
-            text: root.promptKind === "countdown" ? root.label + " is about to start" : root.question
-          }
-
-          Row {
-            visible: root.promptKind === "countdown"
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: Style.space(14)
-            Repeater {
-              model: root.countdownTotal <= 10 ? root.countdownTotal : 0
-              Text {
-                required property int index
-                readonly property int n: root.countdownTotal - index
-                textFormat: Text.PlainText
-                text: n
-                font.family: Style.font.family
-                font.pixelSize: Style.font.displayLarge
-                font.bold: n === root.countdownLeft
-                color: n === root.countdownLeft ? Color.accent : Util.alpha(Color.popups.text, n > root.countdownLeft ? 0.25 : 0.6)
-              }
-            }
+            text: root.promptKind === "countdown" ? root.label : root.question
           }
 
           Text {
-            visible: root.promptKind === "countdown" && root.countdownTotal > 10
+            visible: root.promptKind === "countdown"
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            color: Color.popups.text
+            font.family: Style.font.family
+            font.pixelSize: Math.round((Style.font.body) * card.zoom)
+            text: root.held
+              ? "Paused: nothing starts until you press Ctrl again."
+              : "Do nothing and it starts alone in " + root.countdownLeft + " s. Keep your hands off keyboard and mouse once it runs."
+          }
+
+          Text {
+            visible: root.promptKind === "countdown"
             anchors.horizontalCenter: parent.horizontalCenter
             textFormat: Text.PlainText
             text: root.countdownLeft
             font.family: Style.font.family
-            font.pixelSize: Style.font.displayLarge
+            font.pixelSize: Math.round(Style.font.displayLarge * card.zoom * 1.4)
             font.bold: true
-            color: Color.accent
+            color: root.held ? Util.alpha(Color.popups.text, 0.4) : Color.accent
+          }
+
+          Rectangle {
+            visible: root.promptKind === "countdown"
+            width: parent.width
+            height: Math.max(Style.space(4), Style.spacing.xs)
+            color: Util.alpha(Color.popups.text, 0.2)
+            Rectangle {
+              height: parent.height
+              width: parent.width * (root.countdownTotal > 0 ? root.countdownLeft / root.countdownTotal : 0)
+              color: root.held ? Util.alpha(Color.popups.text, 0.4) : Color.accent
+              Behavior on width { NumberAnimation { duration: 900 } }
+            }
           }
 
           Text {
@@ -636,7 +659,8 @@ Scope {
             textFormat: Text.PlainText
             color: Color.popups.text
             font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            font.pixelSize: Math.round((Style.font.body) * card.zoom)
+            font.bold: true
             text: "Faster with your help: " + root.helpText
           }
 
@@ -647,7 +671,8 @@ Scope {
             textFormat: Text.PlainText
             color: Color.popups.text
             font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            font.pixelSize: Math.round((Style.font.body) * card.zoom)
+            font.bold: true
             text: "Expected duration: " + Model.estimateLabel(root.estimateSec)
           }
 
@@ -686,7 +711,7 @@ Scope {
               color: Color.popups.text
               selectionColor: Color.accent
               font.family: Style.font.family
-              font.pixelSize: Style.font.body
+              font.pixelSize: Math.round((Style.font.body) * card.zoom)
               Keys.onReturnPressed: root.submitText(text)
               Keys.onEnterPressed: root.submitText(text)
               Keys.onEscapePressed: root.escapeTyping()
@@ -709,21 +734,61 @@ Scope {
               textFormat: Text.PlainText
               text: root.postponing ? "Postpone for how many minutes? Enter sends" : "Type your answer, Enter sends"
               font.family: Style.font.family
-              font.pixelSize: Style.font.body
+              font.pixelSize: Math.round((Style.font.body) * card.zoom)
               color: Util.alpha(Color.popups.text, 0.45)
             }
           }
 
-          Text {
+          Rectangle {
+            id: ctrlBox
             width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
-            font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            color: root.held ? Color.accent : Util.alpha(Color.popups.text, 0.55)
-            font.bold: root.held
-            text: root.held ? "Paused so you can read. Press Ctrl again to continue (auto in " + root.holdLeft + " s)" : "Ctrl alone = more time to read"
+            height: Math.max(ctrlRow.implicitHeight, ctrlText.implicitHeight) + Style.space(16)
+            radius: Style.cornerRadius
+            color: root.held ? Util.alpha(Color.accent, 0.25) : Style.normalFill
+            border.width: root.held ? 2 : 1
+            border.color: root.held ? Color.accent : Style.normalBorderColor
+
+            Row {
+              id: ctrlRow
+              anchors.centerIn: parent
+              spacing: Style.space(10)
+              Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: ctrlKey.implicitWidth + Style.space(16)
+                height: ctrlKey.implicitHeight + Style.space(8)
+                radius: Style.cornerRadius
+                color: Color.accent
+                Text {
+                  id: ctrlKey
+                  anchors.centerIn: parent
+                  textFormat: Text.PlainText
+                  text: "Ctrl"
+                  font.family: Style.font.family
+                  font.pixelSize: Math.round((Style.font.body) * card.zoom)
+                  font.bold: true
+                  color: Color.background
+                }
+              }
+              Text {
+                id: ctrlText
+                anchors.verticalCenter: parent.verticalCenter
+                width: ctrlBox.width - ctrlKey.implicitWidth - Style.space(16) - Style.space(10) - Style.space(24)
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                font.family: Style.font.family
+                font.pixelSize: Math.round((Style.font.body) * card.zoom)
+                font.bold: true
+                color: Color.popups.text
+                text: root.held
+                  ? "PAUSED. Tap Ctrl again to continue (auto in " + root.holdLeft + " s)"
+                  : "Tap Ctrl to pause the timer and take your time to read"
+              }
+            }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.act("hold")
+            }
           }
 
           Row {
@@ -748,7 +813,7 @@ Scope {
               Rectangle {
                 required property var modelData
                 width: keyRow.implicitWidth + Style.space(20)
-                height: Style.spacing.controlHeight
+                height: Math.round(Style.spacing.controlHeight * card.zoom)
                 radius: Style.cornerRadius
                 color: hover.containsMouse ? Style.hoverFill : Style.normalFill
                 border.width: 1
@@ -762,7 +827,7 @@ Scope {
                     textFormat: Text.PlainText
                     text: modelData.key
                     font.family: Style.font.family
-                    font.pixelSize: Style.font.body
+                    font.pixelSize: Math.round((Style.font.body) * card.zoom)
                     font.bold: true
                     color: Color.accent
                   }
@@ -770,7 +835,7 @@ Scope {
                     textFormat: Text.PlainText
                     text: modelData.text
                     font.family: Style.font.family
-                    font.pixelSize: Style.font.body
+                    font.pixelSize: Math.round((Style.font.body) * card.zoom)
                     color: Color.popups.text
                   }
                 }
