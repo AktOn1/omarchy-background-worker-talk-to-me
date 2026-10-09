@@ -72,6 +72,9 @@ Scope {
   property bool held: false
   property int holdLeft: 0
   property bool ctrlArmed: false
+  // input guard: a card that just appeared ignores keys and clicks so typing or clicking elsewhere cannot trigger it
+  property bool inputGuarded: false
+  property double guardOpenAt: 0
   // text typed in the reply / postpone box (shared by the cards on every screen)
   property string replyText: ""
   // screen whose card owns the keyboard while a prompt is open
@@ -347,8 +350,32 @@ Scope {
     root.ctrlArmed = false
   }
 
+  function armGuard() {
+    root.guardOpenAt = Date.now()
+    root.inputGuarded = true
+    guardTimer.interval = Model.DEFAULTS.guardMs
+    guardTimer.restart()
+  }
+
+  // true when the input must be ignored (and the guard is extended while the person keeps typing or clicking)
+  function guardHit() {
+    if (!root.inputGuarded) return false
+    const now = Date.now()
+    guardTimer.interval = Math.max(50, Model.guardUntil(now, root.guardOpenAt) - now)
+    guardTimer.restart()
+    return true
+  }
+
+  Timer { id: guardTimer; onTriggered: root.inputGuarded = false }
+
   function handleKey(event) {
+    if (event.key !== Qt.Key_Control && root.guardHit()) {
+      root.ctrlArmed = false
+      event.accepted = true
+      return
+    }
     if (root.ctrlPress(event)) return
+    if (event.isAutoRepeat) { event.accepted = true; return }
     if (root.typing) return
     const enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
     const action = Model.keyAction(root.promptKind, enter ? "\n" : event.text, event.key === Qt.Key_Escape)
@@ -366,11 +393,14 @@ Scope {
   onPostponingChanged: root.resetPrompt()
   onAskIdChanged: {
     root.held = false
-    if (root.askId !== "") root.resetPrompt()
+    if (root.askId !== "") { root.armGuard(); root.resetPrompt() }
   }
+  onHeldChanged: if (!root.held && root.promptOpen) root.armGuard()
+  onPhaseChanged: if (root.phase === "active" || root.phase === "paused") root.armGuard()
   onPromptOpenChanged: {
     root.held = false
     if (root.promptOpen) {
+      root.armGuard()
       root.promptScreen = root.focusedScreen
       root.resetPrompt()
     }
@@ -592,7 +622,10 @@ Scope {
         MouseArea {
           anchors.fill: parent
           cursorShape: Qt.PointingHandCursor
-          onClicked: { if (root.phase === "idle") root.noticeText = ""; else root.endSession("cancelled", "ended") }
+          onClicked: {
+            if (root.guardHit()) return
+            if (root.phase === "idle") root.noticeText = ""; else root.endSession("cancelled", "ended")
+          }
         }
       }
     }
@@ -688,6 +721,7 @@ Scope {
         color: primary ? Color.accent : chipHover.containsMouse ? Style.hoverFill : Style.normalFill
         border.width: 1
         border.color: primary ? Color.accent : Style.normalBorderColor
+        opacity: root.inputGuarded && chipData.action !== "hold" ? 0.4 : 1
 
         Row {
           id: chipRow
@@ -715,7 +749,7 @@ Scope {
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
-          onClicked: root.act(chip.chipData.action)
+          onClicked: { if (chip.chipData.action === "hold" || !root.guardHit()) root.act(chip.chipData.action) }
         }
       }
 
@@ -799,7 +833,9 @@ Scope {
                 font.pixelSize: Math.round(Style.font.bodySmall * card.zoom)
                 font.bold: true
                 font.letterSpacing: 1
-                text: prompt.bar
+                text: root.inputGuarded
+                  ? "KEYS AND CLICKS IGNORED FOR A MOMENT · KEEP TYPING, NOTHING TRIGGERS"
+                  : prompt.bar
                   ? (root.held ? "PAUSED: NOTHING STARTS · YOUR KEYBOARD AND MOUSE ARE FREE" : "HEADS UP: AN AGENT STARTS TESTING IN " + root.countdownLeft + " s")
                   : (root.standalone ? "AGENT ASKS" : "AGENT ASKS · " + root.askLeft + " s")
               }
