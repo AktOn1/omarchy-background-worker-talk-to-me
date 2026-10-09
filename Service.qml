@@ -10,6 +10,7 @@
 //   quick <id> <question> <timeoutSec> <choice|text>  (experimental) like ask, but also works with no session: a plain
 //                                                question card, no banner. result file adds: busy | dismissed
 //   say <text> | end | cancel <id> | status | ping
+//   notice <text> <seconds>   "agent activity" banner with no session (sent by bin/talk-to-me-watch)
 // Result files: $XDG_RUNTIME_DIR/talk-to-me/<id>.result (the id is validated, no paths from callers).
 
 import QtQuick
@@ -54,6 +55,8 @@ Scope {
   property double pausedEnd: 0
   property int pausedLeft: 0
   property string sayText: ""
+  // banner shown when an agent touches the desktop without a session (see bin/talk-to-me-watch)
+  property string noticeText: ""
   property double sessionEnd: 0
   property int sessionLeft: 0
   // Ctrl alone freezes the countdown / question timer so the text can be read (auto-resumes)
@@ -261,6 +264,16 @@ Scope {
     return "ok"
   }
 
+  function notice(rawText, rawSeconds) {
+    const text = Model.cleanText(rawText, 160)
+    if (text === "") return "error:empty"
+    if (root.phase !== "idle") return "ok"
+    root.noticeText = text
+    noticeTimer.interval = Model.clampInt(rawSeconds, 3, 120, 12) * 1000
+    noticeTimer.restart()
+    return "ok"
+  }
+
   function cancel(id) {
     const cid = Model.cleanId(id)
     if (cid === "") return "error:bad id"
@@ -381,6 +394,18 @@ Scope {
 
   RegularExpressionValidator { id: minutesValidator; regularExpression: /[0-9]{0,4}/ }
 
+  // Agent watcher: tells the user when any agent (Claude, Codex, OpenCode, Gemini, ...) opens a window with no session.
+  readonly property string watchScript: Qt.resolvedUrl("bin/talk-to-me-watch").toString().replace(/^file:\/\//, "")
+  Process {
+    id: watcher
+    command: [root.watchScript]
+    running: root.watchScript !== ""
+    onExited: watchRestart.restart()
+  }
+  Timer { id: watchRestart; interval: 15000; onTriggered: watcher.running = true }
+
+  Timer { id: noticeTimer; onTriggered: root.noticeText = "" }
+
   Timer { id: sayTimer; interval: Model.DEFAULTS.sayMs; onTriggered: root.sayText = "" }
 
   IpcHandler {
@@ -389,6 +414,7 @@ Scope {
     function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
     function quick(id: string, question: string, timeout: string, kind: string): string { return root.quickQuestion(id, question, timeout, kind) }
     function say(text: string): string { return root.say(text) }
+    function notice(text: string, seconds: string): string { return root.notice(text, seconds) }
     function end(): string { root.endSession("cancelled", "ended"); return "ok" }
     function cancel(id: string): string { return root.cancel(id) }
     function status(): string { return root.statusText() }
@@ -404,7 +430,7 @@ Scope {
       id: banner
       required property var modelData
       screen: modelData
-      visible: root.phase !== "idle"
+      visible: root.phase !== "idle" || root.noticeText !== ""
       anchors { top: true }
       margins.top: Style.bar.sizeHorizontal + Style.gapsOut * 2
       implicitWidth: pill.width
@@ -436,7 +462,7 @@ Scope {
             font.family: Style.font.family
             font.pixelSize: Style.font.title
             font.bold: true
-            text: root.phase === "paused" ? "Testing paused" : "TESTING in progress"
+            text: root.phase === "idle" ? "AGENT ACTIVITY" : root.phase === "paused" ? "Testing paused" : "TESTING in progress"
           }
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
@@ -444,7 +470,7 @@ Scope {
             color: Color.background
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
-            text: root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo")) + (root.phase === "active" ? "  ·  " + Model.remainingText(root.sessionLeft) : "")
+            text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo")) + (root.phase === "active" ? "  ·  " + Model.remainingText(root.sessionLeft) : "")
           }
           Text {
             visible: root.sayText !== ""
@@ -463,7 +489,7 @@ Scope {
         MouseArea {
           anchors.fill: parent
           cursorShape: Qt.PointingHandCursor
-          onClicked: root.endSession("cancelled", "ended")
+          onClicked: { if (root.phase === "idle") root.noticeText = ""; else root.endSession("cancelled", "ended") }
         }
       }
     }

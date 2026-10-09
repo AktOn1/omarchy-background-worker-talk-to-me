@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-# talk-to-me-guard-hook: Claude Code PreToolUse hook (matcher Bash|AskUserQuestion). Independent of PATH order,
-# so it also catches absolute paths. Bash: blocks commands that touch the live desktop unless a talk-to-me
-# session is active. AskUserQuestion: while a session is active, questions must go through talk-to-me ask.
+# talk-to-me-guard-hook: pre-tool hook for any agent that can run a command before a tool call (Claude Code, Codex,
+# Gemini CLI, OpenCode via its plugin; same JSON in, exit 2 + stderr = blocked). Independent of PATH order,
+# so it also catches absolute paths. Shell tools: blocks commands that touch the live desktop unless a talk-to-me
+# session is active. Question tools: while a session is active, questions must go through talk-to-me ask.
 import json, os, re, subprocess, sys
 
 if os.environ.get("TALK_TO_ME_GUARD_OFF"):
     sys.exit(0)
+SHELL_TOOLS = {"bash", "shell", "local_shell", "run_shell_command", "execute_bash", "exec_command", "unified_exec", "terminal"}
+ASK_TOOLS = {"askuserquestion", "question", "ask_user"}
 try:
     payload = json.load(sys.stdin)
-    cmd = payload.get("tool_input", {}).get("command", "")
-    tool = payload.get("tool_name", "")
+    args = payload.get("tool_input") or payload.get("args") or payload.get("input") or {}
+    cmd = args.get("command") or args.get("cmd") or ""
+    if isinstance(cmd, list):
+        cmd = str(cmd[-1]) if len(cmd) >= 3 and str(cmd[-2]).startswith("-") and str(cmd[-2]).endswith("c") else " ".join(str(c) for c in cmd)
+    tool = str(payload.get("tool_name") or payload.get("tool") or "").lower()
 except Exception:
     sys.exit(0)
 
@@ -20,7 +26,7 @@ def session_state():
     except Exception:
         return {}
 
-if tool == "AskUserQuestion":
+if tool in ASK_TOOLS:
     st = session_state()
     if st.get("phase") != "active":
         sys.exit(0)
@@ -32,6 +38,9 @@ if tool == "AskUserQuestion":
            "then use talk-to-me ask. " if st.get("mode") == "solo" else "")
         + "If the user presses Esc or P (postpone), stop touching the desktop; the terminal is the fallback only after the session ends.\n")
     sys.exit(2)
+
+if not cmd or tool not in SHELL_TOOLS:
+    sys.exit(0)
 
 # a desktop-touching tool in command position (start, or after ; & | ( ` $( { sudo/env/assignments)
 pre = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:sudo|env|exec|command|nohup|setsid|time)\s+|\w+=\S*\s+)*(?:\S*/)?'

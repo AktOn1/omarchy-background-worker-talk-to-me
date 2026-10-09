@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+# talk-to-me-watch: agent-independent watcher, started by the plugin. It listens to Hyprland's event socket and,
+# when a window opens that belongs to an AI agent run (any agent: the process or one of its parents is a known agent,
+# or its environment carries an agent marker) while no talk-to-me session is active, shows the "AGENT ACTIVITY"
+# banner so the user keeps hands off. No hook, PATH order or agent support needed.
+#   talk-to-me-watch              run the watcher (the plugin does this)
+#   talk-to-me-watch --check PID  print which agent (if any) PID belongs to, then exit 0 (agent) or 1 (none)
+# Extra agent names: one per line in ~/.config/background-worker-talk-to-me/agent-processes.
+import json, os, socket, subprocess, sys, time
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+CLI = os.path.join(HERE, "talk-to-me")
+CONF_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "background-worker-talk-to-me")
+RUNTIME = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid(), "talk-to-me")
+
+AGENTS = {
+    "claude", "claude-code", "opencode", "codex", "gemini", "copilot", "crush", "grok", "openclaw", "cursor-agent",
+    "hermes", "muse", "omp", "pi", "aider", "goose",
+}
+# environment variables an agent leaves in every command it runs (AI_AGENT is the cross-vendor convention)
+ENV_MARKERS = (
+    "AI_AGENT", "CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "OPENCODE", "OPENCODE_PID", "CODEX_SANDBOX", "CODEX_THREAD_ID",
+    "GEMINI_CLI", "GOOSE_TERMINAL", "CURSOR_AGENT", "PAPERCLIP_RUN_ID", "TALK_TO_ME_GUARD",
+)
+
+
+def extra_agents():
+    try:
+        return {l.split("#")[0].strip() for l in open(os.path.join(CONF_DIR, "agent-processes")) if l.split("#")[0].strip()}
+    except OSError:
+        return set()
+
+
+def setting(key, default):
+    try:
+        for line in open(os.path.join(CONF_DIR, "settings.conf")):
+            if line.startswith(key + "="):
+                return line.split("=", 1)[1].strip() or default
+    except OSError:
+        pass
+    return default
+
+
+def read(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError:
+        return b""
+
+
+def ppid(pid):
+    stat = read("/proc/%d/stat" % pid).decode(errors="replace")
+    try:
+        return int(stat.rsplit(")", 1)[1].split()[1])
+    except (IndexError, ValueError):
+        return 0
+
+
+def agent_of(pid, names):
+    """Name of the agent a process belongs to, or ''."""
+    env = read("/proc/%d/environ" % pid).split(b"\0")
+    for item in env:
+        key = item.split(b"=", 1)[0].decode(errors="replace")
+        if key in ENV_MARKERS and item.split(b"=", 1)[1:] not in ([b""], [b"0"], []):
+            return key.lower()
+    seen = 0
+    while pid > 1 and seen < 40:
+        comm = read("/proc/%d/comm" % pid).decode(errors="replace").strip()
+        args = [os.path.basename(a.decode(errors="replace")) for a in read("/proc/%d/cmdline" % pid).split(b"\0")[:3] if a]
+        for cand in [comm] + args:
+            cand = cand.removesuffix(".js").removesuffix(".mjs")
+            if cand in names:
+                return cand
+        pid = ppid(pid)
+        seen += 1
+    return ""
+
+
+def session_active():
+    try:
+        out = subprocess.run([CLI, "status"], capture_output=True, text=True, timeout=5).stdout
+        return json.loads(out).get("phase", "idle") != "idle"
+    except Exception:
+        return False
+
+
+def window_pid(address):
+    try:
+        out = subprocess.run(["hyprctl", "-j", "clients"], capture_output=True, text=True, timeout=5).stdout
+        for c in json.loads(out):
+            if c.get("address", "").removeprefix("0x") == address.removeprefix("0x"):
+                return int(c.get("pid", 0)), c.get("class", "") or c.get("initialClass", "")
+    except Exception:
+        pass
+    return 0, ""
+
+
+def log(line):
+    try:
+        os.makedirs(RUNTIME, mode=0o700, exist_ok=True)
+        with open(os.path.join(RUNTIME, "agent-activity.log"), "a") as f:
+            f.write(time.strftime("%H:%M:%S ") + line + "\n")
+    except OSError:
+        pass
+
+
+def handle_open(payload, names):
+    parts = payload.split(",", 3)
+    if len(parts) < 3 or setting("watch", "on") != "on":
+        return
+    pid, cls = window_pid(parts[0])
+    if pid <= 0:
+        return
+    agent = agent_of(pid, names)
+    if not agent:
+        return
+    if session_active():
+        return
+    cls = cls or parts[2]
+    log("window %s opened by agent %s (pid %d), no session" % (cls, agent, pid))
+    subprocess.run([CLI, "notice", "An agent opened a window (%s). Hands off for a moment." % cls[:40]], capture_output=True, timeout=5)
+
+
+def claim_pidfile():
+    os.makedirs(RUNTIME, mode=0o700, exist_ok=True)
+    path = os.path.join(RUNTIME, "watch.pid")
+    old = read(path).decode().strip()
+    if old.isdigit() and int(old) != os.getpid() and b"talk-to-me-watch" in read("/proc/%s/cmdline" % old):
+        try:
+            os.kill(int(old), 15)
+            time.sleep(0.3)
+        except OSError:
+            pass
+    with open(path, "w") as f:
+        f.write(str(os.getpid()))
+
+
+def main():
+    names = AGENTS | extra_agents()
+    if len(sys.argv) == 3 and sys.argv[1] == "--check":
+        agent = agent_of(int(sys.argv[2]), names)
+        print(agent)
+        sys.exit(0 if agent else 1)
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    runtime = os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()
+    path = os.path.join(runtime, "hypr", sig, ".socket2.sock")
+    if not sig or not os.path.exists(path):
+        sys.exit(1)
+    claim_pidfile()
+    parent = os.getppid()
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(path)
+    s.settimeout(5)
+    buf = b""
+    while True:
+        if os.getppid() != parent:
+            return
+        try:
+            chunk = s.recv(65536)
+        except socket.timeout:
+            continue
+        if not chunk:
+            return
+        buf += chunk
+        *lines, buf = buf.split(b"\n")
+        for raw in lines:
+            event, _, payload = raw.decode(errors="replace").partition(">>")
+            if event == "openwindow":
+                handle_open(payload, names)
+
+
+if __name__ == "__main__":
+    main()

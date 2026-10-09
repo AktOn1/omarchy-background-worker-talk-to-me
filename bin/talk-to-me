@@ -4,6 +4,7 @@
 #        talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 #        talk-to-me question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
 #        talk-to-me say "TEXT"
+#        talk-to-me notice "TEXT" [--seconds N]   (banner without a session; the agent watcher uses it)
 #        talk-to-me end
 #        talk-to-me status
 #        talk-to-me require [WHAT]    -> exit 0 ok, 99 = agent run with no active session (put it in launcher scripts)
@@ -43,6 +44,8 @@ talk-to-me: Background Worker Talk To Me
   talk-to-me settings [get KEY | set KEY VALUE | reset [KEY]]
       Show or change the settings (stored in ~/.config/background-worker-talk-to-me/settings.conf).
         questions         on|off   allow "talk-to-me question" (default off, experimental)
+        watch             on|off   agent watcher: banner when any agent opens a window with no session (default on)
+        notice-seconds    SEC      how long that notice stays (default 12, 3-120)
         question-timeout  SEC      how long a question card stays (default 120, 3-600)
         question-gap      SEC      minimum seconds between two questions (default 60, 0-3600)
         countdown         SEC      default start countdown (default 5, 1-30)
@@ -51,10 +54,13 @@ talk-to-me: Background Worker Talk To Me
         text-timeout      SEC      default for talk-to-me ask --text (default 120, 3-600)
       Command-line options (--countdown, --max, --timeout) still win over settings.
   talk-to-me say "TEXT"      Short status line on the banner (no answer needed).
+  talk-to-me notice "TEXT" [--seconds N]
+      A short "agent activity" banner on every screen, no session needed (default 12 s, click to dismiss).
+      The agent watcher (talk-to-me-watch) shows it when a window opens from an agent run with no session.
   talk-to-me end             Remove the banner and finish the session.
   talk-to-me status          Print the session state as JSON.
   talk-to-me require [WHAT]  For launcher scripts that open a window (a game, an app): exits 0 when it is fine
-      to go on, 99 (with a message) when an agent run (CLAUDECODE, PAPERCLIP_RUN_ID or TALK_TO_ME_GUARD=1)
+      to go on, 99 (with a message) when an agent run (AI_AGENT, CLAUDECODE, OPENCODE, GEMINI_CLI, CODEX_THREAD_ID, PAPERCLIP_RUN_ID or TALK_TO_ME_GUARD=1)
       has no active session. Always 0 for a person at a terminal or with TALK_TO_ME_GUARD_OFF=1.
 
 Environment: TALK_TO_ME_QS_PATH=<dir> talks to a scratch Quickshell config instead of omarchy-shell.
@@ -88,11 +94,13 @@ call() {
 }
 
 CONF_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/background-worker-talk-to-me/settings.conf"
-SETTING_KEYS="questions question-timeout question-gap countdown max ask-timeout text-timeout"
+SETTING_KEYS="questions watch notice-seconds question-timeout question-gap countdown max ask-timeout text-timeout"
 
 setting_default() {
   case $1 in
     questions) echo off ;;
+    watch) echo on ;;
+    notice-seconds) echo 12 ;;
     question-timeout) echo 120 ;;
     question-gap) echo 60 ;;
     countdown) echo 5 ;;
@@ -106,6 +114,7 @@ setting_default() {
 setting_range() {
   case $1 in
     question-timeout|ask-timeout|text-timeout) echo "3 600" ;;
+    notice-seconds) echo "3 120" ;;
     question-gap) echo "0 3600" ;;
     countdown) echo "1 30" ;;
     max) echo "1 240" ;;
@@ -120,7 +129,7 @@ setting_get() {
     value=${line#*=}
   fi
   if [[ -z $value ]]; then setting_default "$key"; return; fi
-  if [[ $key == questions ]]; then
+  if [[ $key == questions || $key == watch ]]; then
     case $value in on|off) echo "$value" ;; *) setting_default "$key" ;; esac
   elif [[ $value =~ ^[0-9]+$ ]]; then echo "$value"
   else setting_default "$key"; fi
@@ -130,8 +139,8 @@ setting_valid_key() { [[ " $SETTING_KEYS " == *" $1 "* ]]; }
 
 setting_validate() {
   local key=$1 value=$2 lo hi
-  if [[ $key == questions ]]; then
-    [[ $value == on || $value == off ]] || die "questions takes on or off"
+  if [[ $key == questions || $key == watch ]]; then
+    [[ $value == on || $value == off ]] || die "$key takes on or off"
     return
   fi
   [[ $value =~ ^[0-9]+$ ]] || die "$key takes a whole number"
@@ -320,6 +329,18 @@ case $cmd in
     esac
     ;;
 
+  notice)
+    secs=$(setting_get notice-seconds) text=""
+    while (( $# )); do
+      case $1 in
+        --seconds) secs=${2:?--seconds needs a number}; shift 2 ;;
+        *) text=${text:+$text }$1; shift ;;
+      esac
+    done
+    [[ -n $text ]] || die 'usage: talk-to-me notice "TEXT" [--seconds N]'
+    call notice "$text" "$secs" >/dev/null
+    ;;
+
   say)
     [[ $# -ge 1 ]] || die 'usage: talk-to-me say "TEXT"'
     call say "$*" >/dev/null
@@ -334,7 +355,7 @@ case $cmd in
     ;;
 
   require)
-    [[ -n ${PAPERCLIP_RUN_ID:-} || -n ${CLAUDECODE:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] || exit 0
+    [[ -n ${AI_AGENT:-} || -n ${PAPERCLIP_RUN_ID:-} || -n ${CLAUDECODE:-} || -n ${OPENCODE:-} || -n ${GEMINI_CLI:-} || -n ${CODEX_THREAD_ID:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] || exit 0
     [[ -z ${TALK_TO_ME_GUARD_OFF:-} ]] || exit 0
     [[ $("$0" status 2>/dev/null) == *'"phase":"active"'* ]] && exit 0
     cat >&2 <<MSG

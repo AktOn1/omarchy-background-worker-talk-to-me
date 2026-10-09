@@ -17,9 +17,15 @@ Usage: talk-to-me-install-agent <command> [args]
                      ~/.claude/settings.json (works whatever PATH order, catches absolute paths), and
                      (2) shims in $bindir (only effective if $bindir comes before /usr/bin in PATH)
   guard-remove       undo 'guard' (hook and shims)
-  all FILE           skill + block FILE + guard
+  agents             one command for every agent found on this machine: Claude Code, Codex, Gemini CLI, OpenCode
+                     (a tool hook that refuses desktop-touching commands without a session) and pi (block only),
+                     plus the instruction block in each one's global instructions file. Other agents: use 'block FILE'.
+  agents-remove      undo 'agents' (hooks, OpenCode plugin, shims). Instruction blocks stay; delete them by hand.
+  all FILE           skill + block FILE + guard (Claude Code only)
   status             show what is installed
-Agent runs are detected by CLAUDECODE or PAPERCLIP_RUN_ID; for other agents export TALK_TO_ME_GUARD=1.
+The plugin also runs a watcher that needs no setup: it shows an "AGENT ACTIVITY" banner when a window opens from
+any agent run (Claude, Codex, Gemini, OpenCode, pi, ...). Agent runs for the shims are detected by AI_AGENT, CLAUDECODE or
+PAPERCLIP_RUN_ID; for other agents export TALK_TO_ME_GUARD=1.
 U
 }
 
@@ -50,19 +56,29 @@ install_block() {
 }
 
 settings=${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
+codex_hooks=${CODEX_HOOKS:-$HOME/.codex/hooks.json}
+gemini_settings=${GEMINI_SETTINGS:-$HOME/.gemini/settings.json}
+opencode_dir=${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}
+pi_dir=${PI_AGENT_DIR:-$HOME/.pi/agent}
+claude_matcher='Bash|AskUserQuestion'
+codex_matcher='Bash|shell|local_shell|exec_command|unified_exec'
+gemini_matcher='run_shell_command'
 
+# edit_hook FILE add|remove EVENT MATCHER TIMEOUT: add or remove our hook in a Claude Code style JSON file
+# (Claude settings.json and Codex hooks.json use PreToolUse, Gemini settings.json uses BeforeTool).
 edit_hook() {
-  python3 - "$settings" "$root/bin/talk-to-me-guard-hook" "$1" <<'PY'
+  local file=${1:-$settings} action=$2 event=${3:-PreToolUse} matcher=${4:-$claude_matcher} timeout=${5:-10}
+  python3 - "$file" "$root/bin/talk-to-me-guard-hook" "$action" "$event" "$matcher" "$timeout" <<'PY'
 import json, os, shutil, sys
-path, hook, action = sys.argv[1:4]
+path, hook, action, event, matcher, timeout = sys.argv[1:7]
 data = json.load(open(path)) if os.path.exists(path) else {}
-pre = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
+pre = data.setdefault("hooks", {}).setdefault(event, [])
 mine = lambda e: any("talk-to-me-guard-hook" in h.get("command", "") for h in e.get("hooks", []))
 had = any(mine(e) for e in pre)
 if action == "add" and not had:
     if os.path.exists(path) and not os.path.exists(path + ".talk-to-me-backup"):
         shutil.copy(path, path + ".talk-to-me-backup")
-    pre.append({"matcher": "Bash|AskUserQuestion", "hooks": [{"type": "command", "command": hook, "timeout": 10}]})
+    pre.append({"matcher": matcher, "hooks": [{"type": "command", "command": hook, "timeout": int(timeout)}]})
     print("hook added to " + path)
 elif action == "remove" and had:
     pre[:] = [e for e in pre if not mine(e)]
@@ -70,18 +86,40 @@ elif action == "remove" and had:
 elif action == "add":
     for e in pre:
         if mine(e):
-            e["matcher"] = "Bash|AskUserQuestion"
-    print("hook already on (matcher updated)")
+            e["matcher"] = matcher
+    print("hook already on in " + path + " (matcher updated)")
 else:
-    print("hook already " + ("on" if had else "off"))
+    print("hook already " + ("on" if had else "off") + " in " + path)
     sys.exit(0)
 os.makedirs(os.path.dirname(path), exist_ok=True)
 json.dump(data, open(path, "w"), indent=2)
 PY
 }
 
+opencode_plugin() { echo "$opencode_dir/plugins/talk-to-me-guard.js"; }
+
+install_opencode_plugin() {
+  mkdir -p "$opencode_dir/plugins"
+  cat > "$(opencode_plugin)" <<JS
+// talk-to-me-guard (installed by talk-to-me-install-agent; remove with: talk-to-me-install-agent agents-remove)
+// Refuses desktop-touching shell commands until a talk-to-me session is active.
+import { spawnSync } from "node:child_process"
+
+export const TalkToMeGuard = async () => ({
+  "tool.execute.before": async (input, output) => {
+    const r = spawnSync("$root/bin/talk-to-me-guard-hook", [], {
+      input: JSON.stringify({ tool_name: input.tool, tool_input: output.args }),
+      encoding: "utf8",
+    })
+    if (r.status === 2) throw new Error(r.stderr || "blocked by talk-to-me-guard")
+  },
+})
+JS
+  echo "opencode plugin written: $(opencode_plugin)"
+}
+
 install_guard() {
-  edit_hook add
+  edit_hook "$settings" add PreToolUse "$claude_matcher"
   mkdir -p "$bindir"
   ln -sf "$root/bin/talk-to-me" "$bindir/talk-to-me"
   for n in "${guarded[@]}"; do ln -sf "$root/bin/talk-to-me-guard" "$bindir/$n"; done
@@ -90,17 +128,57 @@ install_guard() {
 }
 
 remove_guard() {
-  edit_hook remove
+  edit_hook "$settings" remove PreToolUse "$claude_matcher"
   for n in "${guarded[@]}"; do
     [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/talk-to-me-guard" ]] && rm "$bindir/$n" && echo "removed $bindir/$n"
   done
   return 0
 }
 
+
+# Every agent Omarchy can launch gets the instruction block; hooks only where the agent has a tool hook we know.
+# Only agents whose config directory exists are touched.
+agents_install() {
+  if [[ -d $(dirname "$settings") ]]; then
+    edit_hook "$settings" add PreToolUse "$claude_matcher"; install_block "$HOME/.claude/CLAUDE.md"; install_skill
+  fi
+  if [[ -d $(dirname "$codex_hooks") ]]; then
+    edit_hook "$codex_hooks" add PreToolUse "$codex_matcher"; install_block "$(dirname "$codex_hooks")/AGENTS.md"
+  fi
+  if [[ -d $(dirname "$gemini_settings") ]]; then
+    edit_hook "$gemini_settings" add BeforeTool "$gemini_matcher" 10000; install_block "$(dirname "$gemini_settings")/GEMINI.md"
+  fi
+  if [[ -d $opencode_dir ]]; then
+    install_opencode_plugin; install_block "$opencode_dir/AGENTS.md"
+  fi
+  if [[ -d $pi_dir ]]; then
+    install_block "$pi_dir/AGENTS.md"
+  fi
+  mkdir -p "$bindir"; ln -sf "$root/bin/talk-to-me" "$bindir/talk-to-me"
+  echo "Done. Hooks only apply to NEW agent sessions. Agents without a hook here (pi, crush, copilot, ...) rely on the"
+  echo "instruction block, the shims and the always-on watcher (banner when an agent opens a window)."
+  echo "Other agent? Add the block to its instructions file:  talk-to-me-install-agent block FILE"
+}
+
+agents_remove() {
+  edit_hook "$settings" remove PreToolUse "$claude_matcher"
+  edit_hook "$codex_hooks" remove PreToolUse "$codex_matcher"
+  edit_hook "$gemini_settings" remove BeforeTool "$gemini_matcher" 10000
+  rm -f "$(opencode_plugin)" && echo "opencode plugin removed"
+  remove_guard
+}
+
 status() {
   command -v talk-to-me >/dev/null && echo "talk-to-me: $(command -v talk-to-me)" || echo "talk-to-me: not in PATH"
   [[ -f $HOME/.claude/skills/background-worker-talk-to-me/SKILL.md ]] && echo "skill: installed" || echo "skill: not installed"
-  grep -qs talk-to-me-guard-hook "$settings" && echo "guard hook: on" || echo "guard hook: off"
+  local f
+  for f in "$settings" "$codex_hooks" "$gemini_settings"; do
+    grep -qs talk-to-me-guard-hook "$f" && echo "guard hook: on ($f)" || echo "guard hook: off ($f)"
+  done
+  [[ -f $(opencode_plugin) ]] && echo "guard hook: on ($(opencode_plugin))" || echo "guard hook: off (opencode plugin)"
+  for f in "$HOME/.claude/CLAUDE.md" "$(dirname "$codex_hooks")/AGENTS.md" "$(dirname "$gemini_settings")/GEMINI.md" "$opencode_dir/AGENTS.md" "$pi_dir/AGENTS.md"; do
+    grep -qsF "$start" "$f" && echo "instruction block: on ($f)" || echo "instruction block: off ($f)"
+  done
   for n in "${guarded[@]}"; do
     [[ $(readlink -f "$bindir/$n" 2>/dev/null) == "$root/bin/talk-to-me-guard" ]] && echo "guard shim $n: on" || echo "guard shim $n: off"
   done
@@ -111,6 +189,8 @@ case ${1:-} in
   block) install_block "${2:-}" ;;
   guard) install_guard ;;
   guard-remove) remove_guard ;;
+  agents) agents_install ;;
+  agents-remove) agents_remove ;;
   all) install_skill; install_block "${2:?all needs a target file}"; install_guard ;;
   status) status ;;
   *) usage; exit 2 ;;
