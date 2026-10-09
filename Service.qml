@@ -350,7 +350,8 @@ Scope {
   function handleKey(event) {
     if (root.ctrlPress(event)) return
     if (root.typing) return
-    const action = Model.keyAction(root.promptKind, event.text, event.key === Qt.Key_Escape)
+    const enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+    const action = Model.keyAction(root.promptKind, enter ? "\n" : event.text, event.key === Qt.Key_Escape)
     if (action === "") return
     event.accepted = true
     root.act(action)
@@ -385,7 +386,10 @@ Scope {
     else if (action === "postpone") root.openPostpone()
     else if (action === "send") root.submitText(root.replyText)
     else if (action === "esc") root.escapeTyping()
-    else if (root.promptKind === "countdown") { if (action !== "human" || root.helpText !== "") root.beginActive(action) }
+    else if (root.promptKind === "countdown") {
+      if (action === "start") root.beginActive("solo")
+      else if (action !== "human" || root.helpText !== "") root.beginActive(action)
+    }
     else root.answer(action)
   }
 
@@ -605,7 +609,7 @@ Scope {
       id: shield
       required property var modelData
       screen: modelData
-      visible: root.phase === "active" && root.mode === "solo" && root.shieldOn
+      visible: root.phase === "active" && root.mode === "solo" && root.shieldOn && !root.held
       anchors { top: true; bottom: true; left: true; right: true }
       color: "transparent"
       exclusionMode: ExclusionMode.Ignore
@@ -658,7 +662,7 @@ Scope {
       exclusionMode: ExclusionMode.Ignore
       WlrLayershell.namespace: "background-worker-talk-to-me-prompt"
       WlrLayershell.layer: WlrLayer.Overlay
-      WlrLayershell.keyboardFocus: !root.promptOpen || !owner ? WlrKeyboardFocus.None : bar ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
+      WlrLayershell.keyboardFocus: !root.promptOpen || !owner ? WlrKeyboardFocus.None : bar && !root.held ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
 
       function refocus() {
         if (!owner || !visible) return
@@ -731,7 +735,7 @@ Scope {
           if (prompt.bar) {
             const list = [ ctrl ]
             if (root.helpText !== "") list.push({ key: "Y", text: "I'll help", action: "human" })
-            list.push({ key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" })
+            list.push({ key: "Enter", text: "start now", action: "start" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" })
             return list
           }
           if (root.typing) {
@@ -796,7 +800,7 @@ Scope {
                 font.bold: true
                 font.letterSpacing: 1
                 text: prompt.bar
-                  ? (root.held ? "PAUSED: NOTHING STARTS UNTIL YOU TAP CTRL AGAIN" : "HEADS UP: AN AGENT STARTS TESTING IN " + root.countdownLeft + " s")
+                  ? (root.held ? "PAUSED: NOTHING STARTS · YOUR KEYBOARD AND MOUSE ARE FREE" : "HEADS UP: AN AGENT STARTS TESTING IN " + root.countdownLeft + " s")
                   : (root.standalone ? "AGENT ASKS" : "AGENT ASKS · " + root.askLeft + " s")
               }
               Text {

@@ -21,12 +21,12 @@ function cleanText(value, max) {
 }
 
 // Maps a key press to an action for the current phase.
-//   countdown -> "human" | "postpone" | "end" | ""
+//   countdown -> "human" | "start" | "postpone" | "end" | ""
 //   ask       -> "yes" | "no" | "unsure" | "type" | "postpone" | "end" | ""
 function keyAction(phase, text, isEscape) {
   if (isEscape) return "end"
   var t = String(text || "").toLowerCase()
-  if (phase === "countdown") return t === "y" ? "human" : t === "p" ? "postpone" : ""
+  if (phase === "countdown") return t === "y" ? "human" : t === "s" || t === "\n" ? "start" : t === "p" ? "postpone" : ""
   if (phase === "ask") {
     if (t === "y") return "yes"
     if (t === "n") return "no"
