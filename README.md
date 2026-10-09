@@ -2,6 +2,8 @@
 
 <a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
+![An agent tests on the desktop: TESTING badge with time ring top right, question card with Y / N / ? answers bottom right](preview.png)
+
 Omarchy shell plugin for working with AI agents. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Y / N / ? or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
 
 ## Why you want this
@@ -21,7 +23,7 @@ A session (countdown + banner) is for work that uses **your** screen, keyboard o
 - Long autonomous runs: you work in another app; the agent posts a status line on the banner, or (experimental) asks a blocking question on screen.
 - Anything where a screenshot cannot show the answer (animation, timing, "feels laggy").
 
-### Screenshots
+### More screenshots
 **1. Countdown bar with the agent's offer.** The agent says what you could do faster than it can alone; Y = "I'll help", Enter = start now, P = postpone, Esc = cancel.
 ![Countdown bar with a help offer and Ctrl, Y, P, Esc keys](docs/screenshots/01-start-countdown.png)
 
