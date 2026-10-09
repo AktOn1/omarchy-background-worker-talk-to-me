@@ -79,6 +79,11 @@ Scope {
   property string replyText: ""
   // screen whose card owns the keyboard while a prompt is open
   property var promptScreen: null
+  // "work is done" card (green checkmark) shown after the agent ends an active session
+  property bool doneShow: false
+  property bool doneFading: false
+  property string doneLabel: ""
+  property string doneTime: ""
 
   // gap from the top bar / the screen edge for the corner badge, the question card and the start bar
   readonly property real cornerTop: Style.bar.sizeHorizontal + Style.gapsOut * 2
@@ -126,12 +131,27 @@ Scope {
 
   // ---- session ----------------------------------------------------------------
 
+  function finishSession(quiet) {
+    const celebrate = !quiet && root.phase === "active"
+    const label = root.label
+    const took = Model.remainingText(root.elapsedSec)
+    root.endSession("cancelled", "ended")
+    if (!celebrate) return
+    root.doneLabel = label
+    root.doneTime = took
+    root.doneFading = false
+    root.doneShow = true
+    doneFadeTimer.restart()
+    doneHideTimer.restart()
+  }
+
   function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp, rawEstimate, rawShield) {
     const cid = Model.cleanId(id)
     if (!cid) return "error:bad id"
     if (root.runtimeBase === "") return "error:no XDG_RUNTIME_DIR"
     if (root.phase !== "idle") root.endSession("cancelled", "ended")
     else if (root.askId !== "") root.answer("superseded")
+    root.doneShow = false
     root.label = Model.cleanText(rawLabel, 60) || "Desktop testing"
     root.helpText = Model.cleanText(rawHelp, 160)
     root.startId = cid
@@ -476,6 +496,9 @@ Scope {
 
   Timer { id: sayTimer; interval: Model.DEFAULTS.sayMs; onTriggered: root.sayText = "" }
 
+  Timer { id: doneFadeTimer; interval: 3000; onTriggered: root.doneFading = true }
+  Timer { id: doneHideTimer; interval: 3500; onTriggered: root.doneShow = false }
+
   IpcHandler {
     target: "talk-to-me"
     function start(id: string, label: string, countdown: string, maxMinutes: string, help: string, estimate: string, shield: string): string { return root.startSession(id, label, countdown, maxMinutes, help, estimate, shield) }
@@ -484,7 +507,8 @@ Scope {
     function say(text: string): string { return root.say(text) }
     function eta(seconds: string): string { return root.eta(seconds) }
     function notice(text: string, seconds: string): string { return root.notice(text, seconds) }
-    function end(): string { root.endSession("cancelled", "ended"); return "ok" }
+    function end(): string { root.finishSession(false); return "ok" }
+    function endquiet(): string { root.finishSession(true); return "ok" }
     function cancel(id: string): string { return root.cancel(id) }
     function status(): string { return root.statusText() }
     function ping(): string { return "ok" }
@@ -625,6 +649,132 @@ Scope {
           onClicked: {
             if (root.guardHit()) return
             if (root.phase === "idle") root.noticeText = ""; else root.endSession("cancelled", "ended")
+          }
+        }
+      }
+    }
+  }
+
+  // ---- done card: green checkmark that draws itself when the agent ends a test (every screen, no input) ----
+
+  Variants {
+    model: Quickshell.screens
+
+    PanelWindow {
+      id: doneWin
+      required property var modelData
+      screen: modelData
+      visible: root.doneShow
+      anchors { top: true; right: true }
+      margins.top: root.cornerTop
+      margins.right: root.cornerSide
+      implicitWidth: doneCard.width
+      implicitHeight: doneCard.height
+      color: "transparent"
+      exclusionMode: ExclusionMode.Ignore
+      mask: Region {}
+      WlrLayershell.namespace: "background-worker-talk-to-me-done"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+      Rectangle {
+        id: doneCard
+        readonly property color good: "#3fb950"
+        property real progress: 0
+        width: Math.min(Style.space(420), Math.max(Style.space(240), doneRow.implicitWidth + Style.space(28)))
+        height: doneRow.implicitHeight + Style.space(24)
+        radius: Style.cornerRadius
+        color: Util.alpha(Color.background, 0.96)
+        border.width: Math.max(2, Style.space(2))
+        border.color: good
+        opacity: root.doneFading ? 0 : 1
+        transformOrigin: Item.Right
+        Behavior on opacity { NumberAnimation { duration: 450; easing.type: Easing.InOutQuad } }
+
+        ParallelAnimation {
+          running: root.doneShow
+          NumberAnimation { target: doneCard; property: "progress"; from: 0; to: 1; duration: 750; easing.type: Easing.InOutCubic }
+          NumberAnimation { target: doneCard; property: "scale"; from: 0.8; to: 1; duration: 500; easing.type: Easing.OutBack }
+        }
+        onProgressChanged: tick.requestPaint()
+
+        Row {
+          id: doneRow
+          anchors.centerIn: parent
+          spacing: Style.space(14)
+
+          Item {
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(54)
+            height: width
+
+            Canvas {
+              id: tick
+              anchors.fill: parent
+              onWidthChanged: requestPaint()
+              onPaint: {
+                const ctx = getContext("2d")
+                ctx.reset()
+                const p = doneCard.progress
+                const lw = Math.max(3, Math.round(width / 10))
+                const r = (width - lw) / 2
+                ctx.lineWidth = lw
+                ctx.lineCap = "round"
+                ctx.lineJoin = "round"
+                ctx.strokeStyle = doneCard.good.toString()
+                const circle = Math.min(1, p / 0.6)
+                if (circle > 0) {
+                  ctx.beginPath()
+                  ctx.arc(width / 2, height / 2, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * circle)
+                  ctx.stroke()
+                }
+                const check = Math.max(0, (p - 0.55) / 0.45)
+                if (check > 0) {
+                  const ax = width * 0.28, ay = height * 0.52
+                  const bx = width * 0.44, by = height * 0.67
+                  const cx = width * 0.73, cy = height * 0.36
+                  ctx.beginPath()
+                  ctx.moveTo(ax, ay)
+                  const first = Math.min(1, check / 0.4)
+                  ctx.lineTo(ax + (bx - ax) * first, ay + (by - ay) * first)
+                  if (check > 0.4) {
+                    const second = (check - 0.4) / 0.6
+                    ctx.lineTo(bx + (cx - bx) * second, by + (cy - by) * second)
+                  }
+                  ctx.stroke()
+                }
+              }
+            }
+          }
+
+          Column {
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(2)
+
+            Text {
+              textFormat: Text.PlainText
+              color: doneCard.good
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              font.bold: true
+              text: "DONE"
+            }
+            Text {
+              width: Math.min(implicitWidth, Style.space(300))
+              elide: Text.ElideRight
+              textFormat: Text.PlainText
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: root.doneLabel
+            }
+            Text {
+              textFormat: Text.PlainText
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: "Finished in " + root.doneTime + " · desktop is yours"
+            }
           }
         }
       }

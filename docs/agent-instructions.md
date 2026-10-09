@@ -34,8 +34,9 @@ guessing from screenshots.
    - `unsure` / `timeout`: do not treat as success. Try a screenshot check, or say in your report that the result was not confirmed.
    For an open question that cannot be answered yes/no use `talk-to-me ask "What do you see?" --text`: a textbox opens and it prints `text:<reply>`. Use it sparingly, typing is slower than a key press.
 3. Use `talk-to-me say "text"` for a short status line that needs no answer.
-4. ALWAYS finish with `talk-to-me end`, also when you fail or give up (use a shell `trap` or
-   `talk-to-me end` in your cleanup). Never leave the TESTING banner up.
+4. ALWAYS finish: `talk-to-me end` when the work succeeded (shows a green checkmark "DONE" card), or
+   `talk-to-me end --quiet` when you fail or give up (use `trap 'talk-to-me end --quiet' EXIT` in scripts).
+   Never leave the TESTING banner up.
 
 **Experimental: a question outside a testing session.** When you are blocked on a decision only the human can make (which of two options, "ok to continue?") and a wrong guess would be costly, `talk-to-me question "Which one: A or B?"` (add `--text` for a typed answer) shows a plain question card with no banner and prints `yes`, `no`, `unsure`, `text:<reply>`, `dismissed`, `timeout` or `busy`. It is OFF unless the human ran `talk-to-me settings set questions on`: if it prints `disabled` (exit code 6), do not retry, use your normal way of asking. Exit code 6 also means you asked too soon after the last one (`question-gap`). Do not use it for things you can decide or look up yourself, batch several decisions into one question, and never in a loop. `dismissed` (exit 4) = the human does not want to be asked now: decide yourself or carry on with another part of the task and say what you assumed.
 

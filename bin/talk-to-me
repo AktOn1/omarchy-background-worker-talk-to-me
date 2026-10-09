@@ -6,7 +6,7 @@
 #        talk-to-me say "TEXT"
 #        talk-to-me eta DUR       (revise the expected remaining time: 90s, 3m or 3 = minutes)
 #        talk-to-me notice "TEXT" [--seconds N]   (banner without a session; the agent watcher uses it)
-#        talk-to-me end
+#        talk-to-me end [--quiet]   (a green checkmark card says the work is done; --quiet or --failed skips it)
 #        talk-to-me status
 #        talk-to-me require [WHAT]    -> exit 0 ok, 99 = agent run with no active session (put it in launcher scripts)
 set -u
@@ -67,7 +67,9 @@ talk-to-me: Background Worker Talk To Me
   talk-to-me notice "TEXT" [--seconds N]
       A short "agent activity" banner on every screen, no session needed (default 12 s, click to dismiss).
       The agent watcher (talk-to-me-watch) shows it when a window opens from an agent run with no session.
-  talk-to-me end             Remove the banner and finish the session.
+  talk-to-me end [--quiet]   Remove the banner and finish the session. Shows a green checkmark "DONE" card for 3 s on every screen
+      (the person sees the work is finished and the desktop is theirs again). Use --quiet (or --failed) when the test failed or you
+      ended it only to clean up, so no success is shown.
   talk-to-me status          Print the session state as JSON.
   talk-to-me require [WHAT]  For launcher scripts that open a window (a game, an app): exits 0 when it is fine
       to go on, 99 (with a message) when an agent run (AI_AGENT, CLAUDECODE, OPENCODE, GEMINI_CLI, CODEX_THREAD_ID, PAPERCLIP_RUN_ID or TALK_TO_ME_GUARD=1)
@@ -380,7 +382,7 @@ case $cmd in
     ;;
 
   end)
-    call end >/dev/null
+    if [[ ${1:-} == --quiet || ${1:-} == --failed ]]; then call endquiet >/dev/null; else call end >/dev/null; fi
     ;;
 
   status)

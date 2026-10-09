@@ -34,8 +34,9 @@ visual result was not human-confirmed.
    - `unsure` / `timeout`: not a success. Verify another way (screenshot, `hyprctl`) or report it as unconfirmed.
    Open question? `talk-to-me ask "What do you see?" --text` opens a textbox at once and prints `text:<reply>`. Use sparingly; a key press is faster.
 3. `talk-to-me say "text"` for status that needs no answer.
-4. `talk-to-me end` at the very end, also on failure. Prefer
-   `trap 'talk-to-me end' EXIT` in scripts so the banner never stays up.
+4. `talk-to-me end` at the very end when the work succeeded: it shows a green checkmark "DONE" card for 3 s.
+   On failure or cleanup use `talk-to-me end --quiet` (no checkmark). Prefer
+   `trap 'talk-to-me end --quiet' EXIT` in scripts so the banner never stays up (a no-op once ended).
 
 ## Experimental: ask outside a testing session
 `talk-to-me question "Which one: A or B?" [--text]` pops up a plain question card (no TESTING banner, no `talk-to-me start`
