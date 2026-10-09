@@ -548,7 +548,7 @@ Scope {
       exclusionMode: ExclusionMode.Ignore
       WlrLayershell.namespace: "background-worker-talk-to-me-prompt"
       WlrLayershell.layer: WlrLayer.Overlay
-      WlrLayershell.keyboardFocus: root.promptOpen && owner ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+      WlrLayershell.keyboardFocus: !root.promptOpen || !owner ? WlrKeyboardFocus.None : root.promptKind === "countdown" ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
 
       function refocus() {
         if (!owner || !visible) return
@@ -573,6 +573,11 @@ Scope {
         color: Util.alpha(Color.background, 0.97)
         border.width: Math.max(1, Style.space(2))
         border.color: Color.popups.border
+
+        MouseArea {
+          anchors.fill: parent
+          onPressed: mouse => { prompt.refocus(); mouse.accepted = false }
+        }
 
         FocusScope {
           id: keys
@@ -732,11 +737,23 @@ Scope {
               anchors.leftMargin: Style.space(10)
               anchors.verticalCenter: parent.verticalCenter
               textFormat: Text.PlainText
-              text: root.postponing ? "Postpone for how many minutes? Enter sends" : "Type your answer, Enter sends"
+              text: root.postponing ? "Postpone for how many minutes? Enter sends" : "Click here, type your answer, Enter sends"
               font.family: Style.font.family
               font.pixelSize: Math.round((Style.font.body) * card.zoom)
               color: Util.alpha(Color.popups.text, 0.45)
             }
+          }
+
+          Text {
+            visible: root.promptKind !== "countdown" && !root.typing && !root.postponing
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            font.family: Style.font.family
+            font.pixelSize: Math.round((Style.font.body) * card.zoom * 0.85)
+            color: Util.alpha(Color.popups.text, 0.6)
+            text: "Your keyboard stays free. Click this card to answer with keys, or click a button."
           }
 
           Rectangle {
