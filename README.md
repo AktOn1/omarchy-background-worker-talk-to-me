@@ -18,6 +18,22 @@ AI agents that build or tweak your Omarchy desktop (plugins, Hyprland config, ba
 - Long autonomous runs: you work in another app; the agent posts a status line on the banner, or (experimental) asks a blocking question on screen.
 - Anything where a screenshot cannot show the answer (animation, timing, "feels laggy").
 
+### Screenshots
+**1. Countdown with the agent's offer.** The agent says what you could do faster than it can alone; Y = "I'll help", P = postpone, Esc = cancel.
+![Countdown card "Desktop testing is about to start" with a help offer and a TESTING banner](docs/screenshots/01-start-countdown.png)
+
+**2. TESTING banner.** Always visible while the agent works, with its latest status line.
+![TESTING in progress banner with a status line](docs/screenshots/02-testing-banner.png)
+
+**3. A question you answer with one key.** Y / N / ? (or T to type, P to postpone, Esc to stop the test).
+![Question card "Did the window move from left to right?" with yes, no, can't tell buttons](docs/screenshots/03-question-card.png)
+
+**4. A typed reply.** For open questions the agent gets your own words back on the command line.
+![Question card with a text box](docs/screenshots/04-typed-reply.png)
+
+**5. Postponed.** You asked for time; the banner turns into a blue "Testing paused" pill and the agent waits.
+![Blue pill "Testing paused, resumes in 9:58"](docs/screenshots/05-testing-paused.png)
+
 ## Works with any agent
 Three layers, from "needs nothing" to "needs a hook". Omarchy can launch Claude Code, Codex, Gemini CLI, OpenCode, pi, Crush, Copilot, Cursor, Grok and more, so the plugin does not depend on one of them.
 
