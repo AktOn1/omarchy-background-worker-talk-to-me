@@ -88,6 +88,15 @@ function timeLine(phase, estimate, elapsed) {
   return "Expected " + estimateLabel(est).replace("about ", "") + "  ·  " + progressText(est, elapsed)
 }
 
+// Corner badge ring: text in the middle and how full the ring is (1 = whole estimate left).
+function badgeRing(estimate, elapsed) {
+  var est = Math.max(0, Math.round(estimate))
+  var e = Math.max(0, Math.round(elapsed))
+  if (est <= 0) return { text: remainingText(e), fraction: 1 }
+  if (e <= est) return { text: remainingText(est - e), fraction: (est - e) / est }
+  return { text: "+" + remainingText(e - est), fraction: 0 }
+}
+
 function statusJson(st) {
   return JSON.stringify({
     phase: st.phase,

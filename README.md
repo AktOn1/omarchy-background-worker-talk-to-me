@@ -22,11 +22,11 @@ A session (countdown + banner) is for work that uses **your** screen, keyboard o
 - Anything where a screenshot cannot show the answer (animation, timing, "feels laggy").
 
 ### Screenshots
-**1. Countdown with the agent's offer.** The agent says what you could do faster than it can alone; Y = "I'll help", P = postpone, Esc = cancel.
-![Countdown card "Desktop testing is about to start" with a help offer and a TESTING banner](docs/screenshots/01-start-countdown.png)
+**1. Countdown bar with the agent's offer.** The agent says what you could do faster than it can alone; Y = "I'll help", P = postpone, Esc = cancel.
+![Countdown bar with a help offer and Ctrl, Y, P, Esc keys](docs/screenshots/01-start-countdown.png)
 
-**2. TESTING banner.** Always visible while the agent works, with its latest status line.
-![TESTING in progress banner with a status line](docs/screenshots/02-testing-banner.png)
+**2. TESTING badge.** Always visible in the top-right corner while the agent works: a ring with the time left, the title, the estimate and the latest status line.
+![TESTING badge with a time ring and a status line](docs/screenshots/02-testing-banner.png)
 
 **3. A question you answer with one key.** Y / N / ? (or T to type, P to postpone, Esc to stop the test).
 ![Question card "Did the window move from left to right?" with yes, no, can't tell buttons](docs/screenshots/03-question-card.png)
@@ -34,8 +34,8 @@ A session (countdown + banner) is for work that uses **your** screen, keyboard o
 **4. A typed reply.** For open questions the agent gets your own words back on the command line.
 ![Question card with a text box](docs/screenshots/04-typed-reply.png)
 
-**5. Postponed.** You asked for time; the banner turns into a blue "Testing paused" pill and the agent waits.
-![Blue pill "Testing paused, resumes in 9:58"](docs/screenshots/05-testing-paused.png)
+**5. Postponed.** You asked for time; the badge turns blue ("Testing paused", ring counting down) and the agent waits.
+![Blue badge "Testing paused, resumes in 1:59"](docs/screenshots/05-testing-paused.png)
 
 ## Works with any agent
 Three layers, from "needs nothing" to "needs a hook". Omarchy can launch Claude Code, Codex, Gemini CLI, OpenCode, pi, Crush, Copilot, Cursor, Grok and more, so the plugin does not depend on one of them.
@@ -51,7 +51,7 @@ The hook (layer 2) reads the command the agent is about to run and refuses it, w
 
 ## The flow
 1. **Countdown.** `talk-to-me start "Desktop testing"` shows a card "Desktop testing is about to start 5 4 3 2 1". It is a heads-up, not a question: if you are at the desk and not ready, press **P** or **Esc**; if you are away, it runs out and the agent continues alone. **Y** exists only when the agent asks for help with `talk-to-me start "title" --help "watch the screen and press Y/N after each window move"`: the card then says "Faster with your help: …" and Y = "I'll help" (human mode, `talk-to-me ask` works). **P** = postpone: type the minutes, Enter sends; the countdown waits while you type, the banner turns into a blue "Testing paused, resumes in M:SS" pill and `talk-to-me start` prints `postpone:<minutes>` (exit code 5). **Esc** = cancel (`cancelled`, exit 4: not now, the agent stops). No key = the agent goes on alone (solo mode; `talk-to-me ask` then prints `timeout` at once, so an agent that wants answers must pass `--help`).
-**Easy to read.** The start card is large and spells out what is happening: a "HEADS UP" line, the title, "Do nothing and it starts alone in N s", a big number with a progress bar, and a boxed **Ctrl** line ("Tap Ctrl to pause the timer and take your time to read"; it turns into "PAUSED" while frozen, and the box can be clicked too). The countdown defaults to 10 s (`talk-to-me settings set countdown N`).
+**Easy to read.** The start countdown is a bar at the top of every screen, so your windows stay visible: a big number, a "HEADS UP" line, the title, "It starts alone if you do nothing", a progress line, and key chips with a filled **Ctrl** chip ("pause timer"; it turns into "resume (auto N s)" and the heading says "PAUSED" while frozen; the chips can be clicked too). Questions are a compact card in the bottom-right corner, and the running test is a badge with a time ring in the top-right corner. The countdown defaults to 10 s (`talk-to-me settings set countdown N`).
 
 **Every screen, more time to read.** The countdown and question cards show on every monitor (the buttons are clickable on any of them). Tap **Ctrl alone** to freeze the countdown or question timer while you read; tap Ctrl again to continue (it resumes by itself after 120 s). Ctrl+P and other Ctrl combinations do not count. `talk-to-me` waits long enough for a hold.
 

@@ -1,7 +1,8 @@
 // Background Worker Talk To Me: service. Shows a TESTING banner while a script or agent changes the
 // desktop, a countdown at the start, and a one-key question card on request.
 //
-// Cards and the banner show on every screen. The keyboard is grabbed only while the countdown or a question is on screen. The banner
+// The start countdown is a top bar, questions a card in the bottom-right corner, the TESTING banner a badge with a time ring in the
+// top-right corner. All show on every screen. The keyboard is grabbed only while the countdown or a question is on screen. The banner
 // never takes the keyboard.
 //
 // IPC (target "talk-to-me"; the `talk-to-me` command wraps these and polls the result files):
@@ -54,6 +55,7 @@ Scope {
   property int countdownTypeLeft: 0
   property double pausedEnd: 0
   property int pausedLeft: 0
+  property int pausedTotal: 0
   property string sayText: ""
   // banner shown when an agent touches the desktop without a session (see bin/talk-to-me-watch)
   property string noticeText: ""
@@ -74,6 +76,10 @@ Scope {
   property string replyText: ""
   // screen whose card owns the keyboard while a prompt is open
   property var promptScreen: null
+
+  // gap from the top bar / the screen edge for the corner badge, the question card and the start bar
+  readonly property real cornerTop: Style.bar.sizeHorizontal + Style.gapsOut * 2
+  readonly property real cornerSide: Style.gapsOut * 2
 
   signal focusRequested()
 
@@ -256,6 +262,7 @@ Scope {
     root.label = lbl
     root.pausedEnd = Date.now() + minutes * 60 * 1000
     root.pausedLeft = minutes * 60
+    root.pausedTotal = minutes * 60
     root.phase = "paused"
     ticker.restart()
   }
@@ -449,7 +456,7 @@ Scope {
     function ping(): string { return "ok" }
   }
 
-  // ---- banner (every screen, never takes the keyboard) -------------------------
+  // ---- banner: corner badge with a time ring (every screen, never takes the keyboard) ----
 
   Variants {
     model: Quickshell.screens
@@ -458,11 +465,12 @@ Scope {
       id: banner
       required property var modelData
       screen: modelData
-      visible: root.phase !== "idle" || root.noticeText !== ""
-      anchors { top: true }
-      margins.top: Style.bar.sizeHorizontal + Style.gapsOut * 2
-      implicitWidth: pill.width
-      implicitHeight: pill.height
+      visible: root.phase === "active" || root.phase === "paused" || (root.phase === "idle" && root.noticeText !== "")
+      anchors { top: true; right: true }
+      margins.top: root.cornerTop
+      margins.right: root.cornerSide
+      implicitWidth: badge.width
+      implicitHeight: badge.height
       color: "transparent"
       exclusionMode: ExclusionMode.Ignore
       WlrLayershell.namespace: "background-worker-talk-to-me-banner"
@@ -470,60 +478,110 @@ Scope {
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
       Rectangle {
-        id: pill
-        width: Math.max(Style.space(220), bannerCol.implicitWidth + Style.space(28))
-        height: bannerCol.implicitHeight + Style.space(14)
+        id: badge
+        readonly property color tone: root.phase === "paused" ? Color.accent : Color.urgent
+        readonly property var ringInfo: root.phase === "paused"
+          ? { text: Model.remainingText(root.pausedLeft), fraction: root.pausedTotal > 0 ? root.pausedLeft / root.pausedTotal : 0 }
+          : Model.badgeRing(root.estimateSec, root.elapsedSec)
+        width: Math.min(Style.space(460), Math.max(Style.space(240), badgeRow.implicitWidth + Style.space(24)))
+        height: badgeRow.implicitHeight + Style.space(20)
         onWidthChanged: root.bannerW = width
         onHeightChanged: root.bannerH = height
         radius: Style.cornerRadius
-        color: root.phase === "paused" ? Color.accent : Color.urgent
-        border.width: Math.max(1, Style.space(1))
-        border.color: Util.alpha(Color.background, 0.6)
+        color: Util.alpha(Color.background, 0.96)
+        border.width: Math.max(2, Style.space(2))
+        border.color: tone
 
-        Column {
-          id: bannerCol
+        Row {
+          id: badgeRow
           anchors.centerIn: parent
-          spacing: Style.space(2)
+          spacing: Style.space(12)
 
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            textFormat: Text.PlainText
-            color: Color.background
-            font.family: Style.font.family
-            font.pixelSize: Style.font.title
-            font.bold: true
-            text: root.phase === "idle" ? "AGENT ACTIVITY" : root.phase === "paused" ? "Testing paused" : "TESTING in progress"
+          Item {
+            visible: root.phase !== "idle"
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(54)
+            height: width
+
+            Canvas {
+              id: ring
+              anchors.fill: parent
+              readonly property real fraction: badge.ringInfo.fraction
+              readonly property string tone: badge.tone.toString()
+              onFractionChanged: requestPaint()
+              onToneChanged: requestPaint()
+              onWidthChanged: requestPaint()
+              onPaint: {
+                const ctx = getContext("2d")
+                ctx.reset()
+                const lw = Math.max(3, Math.round(width / 11))
+                const r = (width - lw) / 2
+                ctx.lineWidth = lw
+                ctx.strokeStyle = tone
+                ctx.globalAlpha = 0.25
+                ctx.beginPath()
+                ctx.arc(width / 2, height / 2, r, 0, Math.PI * 2)
+                ctx.stroke()
+                ctx.globalAlpha = 1
+                if (fraction > 0) {
+                  ctx.beginPath()
+                  ctx.arc(width / 2, height / 2, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, fraction))
+                  ctx.stroke()
+                }
+              }
+            }
+            Text {
+              anchors.centerIn: parent
+              textFormat: Text.PlainText
+              text: badge.ringInfo.text
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              font.bold: true
+            }
           }
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            textFormat: Text.PlainText
-            color: Color.background
-            font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : root.shieldOn ? "solo · mouse blocked" : "solo"))
-          }
-          Text {
-            readonly property string line: Model.timeLine(root.phase, root.estimateSec, root.elapsedSec)
-            visible: line !== ""
-            anchors.horizontalCenter: parent.horizontalCenter
-            textFormat: Text.PlainText
-            color: Color.background
-            font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            font.bold: true
-            text: line
-          }
-          Text {
-            visible: root.sayText !== ""
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: Math.min(implicitWidth, Style.space(520))
-            horizontalAlignment: Text.AlignHCenter
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            color: Color.background
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            text: root.sayText
+
+          Column {
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(2)
+
+            Text {
+              textFormat: Text.PlainText
+              color: badge.tone
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              font.bold: true
+              text: root.phase === "idle" ? "AGENT ACTIVITY: hands off" : root.phase === "paused" ? "Testing paused" : root.mode === "human" ? "TESTING · you are helping" : "TESTING · hands off"
+            }
+            Text {
+              width: Math.min(implicitWidth, Style.space(340))
+              elide: Text.ElideRight
+              textFormat: Text.PlainText
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "solo" && root.shieldOn ? "  ·  mouse blocked" : "")
+            }
+            Text {
+              readonly property string line: Model.timeLine(root.phase, root.estimateSec, root.elapsedSec)
+              visible: line !== ""
+              textFormat: Text.PlainText
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              font.bold: true
+              text: line
+            }
+            Text {
+              visible: root.sayText !== ""
+              width: Math.min(implicitWidth, Style.space(340))
+              wrapMode: Text.WordWrap
+              textFormat: Text.PlainText
+              color: Color.popups.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: root.sayText
+            }
           }
         }
 
@@ -558,8 +616,8 @@ Scope {
         item: shieldFill
         Region {
           intersection: Intersection.Subtract
-          x: Math.round((shield.width - root.bannerW) / 2)
-          y: Style.bar.sizeHorizontal + Style.gapsOut * 2
+          x: Math.round(shield.width - root.bannerW - root.cornerSide)
+          y: Math.round(root.cornerTop)
           width: root.bannerW
           height: root.bannerH
         }
@@ -578,7 +636,7 @@ Scope {
     }
   }
 
-  // ---- prompt card (every screen; the keyboard goes to the card on the focused screen) ----
+  // ---- prompt: top bar for the start countdown, corner card for questions (every screen; the keyboard goes to the focused screen) ----
 
   Variants {
     model: Quickshell.screens
@@ -587,17 +645,20 @@ Scope {
       id: prompt
       required property var modelData
       readonly property bool owner: modelData === root.promptScreen
+      readonly property bool bar: root.promptKind === "countdown"
       screen: modelData
       visible: root.promptOpen
-      anchors { bottom: true }
-      margins.bottom: Style.space(67)
+      anchors { top: bar; bottom: !bar; right: !bar }
+      margins.top: root.cornerTop
+      margins.bottom: root.cornerSide
+      margins.right: root.cornerSide
       implicitWidth: card.width
       implicitHeight: card.height
       color: "transparent"
       exclusionMode: ExclusionMode.Ignore
       WlrLayershell.namespace: "background-worker-talk-to-me-prompt"
       WlrLayershell.layer: WlrLayer.Overlay
-      WlrLayershell.keyboardFocus: !root.promptOpen || !owner ? WlrKeyboardFocus.None : root.promptKind === "countdown" ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
+      WlrLayershell.keyboardFocus: !root.promptOpen || !owner ? WlrKeyboardFocus.None : bar ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
 
       function refocus() {
         if (!owner || !visible) return
@@ -613,15 +674,76 @@ Scope {
         function onFocusRequested() { prompt.refocus() }
       }
 
+      component KeyChip: Rectangle {
+        id: chip
+        required property var chipData
+        readonly property bool primary: chipData.primary === true
+        width: chipRow.implicitWidth + Style.space(18)
+        height: Math.round(Style.spacing.controlHeight * card.zoom)
+        radius: Style.cornerRadius
+        color: primary ? Color.accent : chipHover.containsMouse ? Style.hoverFill : Style.normalFill
+        border.width: 1
+        border.color: primary ? Color.accent : Style.normalBorderColor
+
+        Row {
+          id: chipRow
+          anchors.centerIn: parent
+          spacing: Style.space(6)
+          Text {
+            textFormat: Text.PlainText
+            text: chip.chipData.key
+            font.family: Style.font.family
+            font.pixelSize: Math.round(Style.font.body * card.zoom)
+            font.bold: true
+            color: chip.primary ? Color.background : Color.accent
+          }
+          Text {
+            textFormat: Text.PlainText
+            text: chip.chipData.text
+            font.family: Style.font.family
+            font.pixelSize: Math.round(Style.font.body * card.zoom)
+            font.bold: chip.primary
+            color: chip.primary ? Color.background : Color.popups.text
+          }
+        }
+        MouseArea {
+          id: chipHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.act(chip.chipData.action)
+        }
+      }
+
       Rectangle {
         id: card
-        readonly property real zoom: root.promptKind === "countdown" ? 1.35 : 1.2
-        width: Math.max(Style.space(520), Math.min(Style.space(760), cardCol.implicitWidth + Style.space(40)))
-        height: cardCol.implicitHeight + Style.space(32)
+        readonly property real zoom: prompt.bar ? 1.2 : 1.0
+        width: prompt.bar ? Style.space(720) : Style.space(440)
+        height: cardCol.implicitHeight + Style.space(28)
         radius: Style.cornerRadius
         color: Util.alpha(Color.background, 0.97)
-        border.width: Math.max(1, Style.space(2))
-        border.color: Color.popups.border
+        border.width: Math.max(2, Style.space(2))
+        border.color: root.held ? Color.accent : prompt.bar ? Color.urgent : Color.popups.border
+
+        readonly property var chips: {
+          const ctrl = { key: "Ctrl", action: "hold", primary: true, text: root.held ? "resume (auto " + root.holdLeft + " s)" : "pause timer" }
+          if (root.postponing) return [ ctrl, { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
+          if (prompt.bar) {
+            const list = [ ctrl ]
+            if (root.helpText !== "") list.push({ key: "Y", text: "I'll help", action: "human" })
+            list.push({ key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" })
+            return list
+          }
+          if (root.typing) {
+            return root.standalone
+              ? [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Esc", text: root.typeOnly ? "dismiss" : "back", action: "esc" } ]
+              : [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? "stop test" : "back", action: "esc" } ]
+          }
+          const answers = [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "unsure", action: "unsure" }, { key: "T", text: "type", action: "type" } ]
+          return root.standalone
+            ? [ ctrl ].concat(answers, [ { key: "Esc", text: "dismiss", action: "end" } ])
+            : [ ctrl ].concat(answers, [ { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "stop test", action: "end" } ])
+        }
 
         MouseArea {
           anchors.fill: parent
@@ -639,107 +761,75 @@ Scope {
         Column {
           id: cardCol
           anchors.centerIn: parent
-          width: card.width - Style.space(40)
-          spacing: Style.space(12)
+          width: card.width - Style.space(32)
+          spacing: Style.space(10)
 
-          Text {
-            visible: root.promptKind === "countdown"
+          Row {
             width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            textFormat: Text.PlainText
-            color: Color.accent
-            font.family: Style.font.family
-            font.pixelSize: Math.round((Style.font.body) * card.zoom)
-            font.bold: true
-            font.letterSpacing: 1
-            text: "HEADS UP: AN AGENT IS ABOUT TO TEST ON YOUR DESKTOP"
-          }
+            spacing: Style.space(16)
 
-          Text {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
-            color: Color.popups.text
-            font.family: Style.font.family
-            font.pixelSize: Math.round((root.promptKind === "countdown" ? Style.font.title : Style.font.heading) * card.zoom)
-            font.bold: true
-            text: root.promptKind === "countdown" ? root.label : root.question
-          }
-
-          Text {
-            visible: root.promptKind === "countdown"
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
-            color: Color.popups.text
-            font.family: Style.font.family
-            font.pixelSize: Math.round((Style.font.body) * card.zoom)
-            text: root.held
-              ? "Paused: nothing starts until you press Ctrl again."
-              : "Do nothing and it starts alone in " + root.countdownLeft + " s. Keep your hands off keyboard and mouse once it runs."
-          }
-
-          Text {
-            visible: root.promptKind === "countdown"
-            anchors.horizontalCenter: parent.horizontalCenter
-            textFormat: Text.PlainText
-            text: root.countdownLeft
-            font.family: Style.font.family
-            font.pixelSize: Math.round(Style.font.displayLarge * card.zoom * 1.4)
-            font.bold: true
-            color: root.held ? Util.alpha(Color.popups.text, 0.4) : Color.accent
-          }
-
-          Rectangle {
-            visible: root.promptKind === "countdown"
-            width: parent.width
-            height: Math.max(Style.space(4), Style.spacing.xs)
-            color: Util.alpha(Color.popups.text, 0.2)
-            Rectangle {
-              height: parent.height
-              width: parent.width * (root.countdownTotal > 0 ? root.countdownLeft / root.countdownTotal : 0)
-              color: root.held ? Util.alpha(Color.popups.text, 0.4) : Color.accent
-              Behavior on width { NumberAnimation { duration: 900 } }
+            Text {
+              visible: prompt.bar
+              anchors.verticalCenter: parent.verticalCenter
+              width: visible ? Style.space(96) : 0
+              horizontalAlignment: Text.AlignHCenter
+              textFormat: Text.PlainText
+              text: root.countdownLeft
+              font.family: Style.font.family
+              font.pixelSize: Math.round(Style.font.displayLarge * 1.8)
+              font.bold: true
+              color: root.held ? Util.alpha(Color.popups.text, 0.4) : Color.urgent
             }
-          }
 
-          Text {
-            visible: root.promptKind === "countdown" && root.helpText !== ""
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
-            color: Color.popups.text
-            font.family: Style.font.family
-            font.pixelSize: Math.round((Style.font.body) * card.zoom)
-            font.bold: true
-            text: "Faster with your help: " + root.helpText
-          }
+            Column {
+              width: parent.width - (prompt.bar ? Style.space(112) : 0)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(4)
 
-          Text {
-            visible: root.promptKind === "countdown" && root.estimateSec > 0
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            textFormat: Text.PlainText
-            color: Color.popups.text
-            font.family: Style.font.family
-            font.pixelSize: Math.round((Style.font.body) * card.zoom)
-            font.bold: true
-            text: "Expected duration: " + Model.estimateLabel(root.estimateSec)
-          }
-
-          Rectangle {
-            visible: root.promptKind === "ask"
-            width: parent.width
-            height: Math.max(Style.space(3), Style.spacing.xs)
-            color: Util.alpha(Color.popups.text, 0.2)
-            Rectangle {
-              height: parent.height
-              width: parent.width * (root.askTotal > 0 ? root.askLeft / root.askTotal : 0)
-              color: Color.accent
-              Behavior on width { NumberAnimation { duration: 900 } }
+              Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                color: Color.urgent
+                font.family: Style.font.family
+                font.pixelSize: Math.round(Style.font.bodySmall * card.zoom)
+                font.bold: true
+                font.letterSpacing: 1
+                text: prompt.bar
+                  ? (root.held ? "PAUSED: NOTHING STARTS UNTIL YOU TAP CTRL AGAIN" : "HEADS UP: AN AGENT STARTS TESTING IN " + root.countdownLeft + " s")
+                  : (root.standalone ? "AGENT ASKS" : "AGENT ASKS · " + root.askLeft + " s")
+              }
+              Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                color: Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Math.round((prompt.bar ? Style.font.title : Style.font.heading) * card.zoom)
+                font.bold: true
+                text: prompt.bar ? root.label : root.question
+              }
+              Text {
+                visible: prompt.bar && root.helpText !== ""
+                width: parent.width
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                color: Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Math.round(Style.font.body * card.zoom)
+                font.bold: true
+                text: "Faster with your help: " + root.helpText
+              }
+              Text {
+                visible: prompt.bar
+                width: parent.width
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                color: Util.alpha(Color.popups.text, 0.8)
+                font.family: Style.font.family
+                font.pixelSize: Math.round(Style.font.body * card.zoom)
+                text: (root.estimateSec > 0 ? "Expected: " + Model.estimateLabel(root.estimateSec) + ". " : "") + "It starts alone if you do nothing. Keep your hands off keyboard and mouse once it runs."
+              }
             }
           }
 
@@ -765,7 +855,7 @@ Scope {
               color: Color.popups.text
               selectionColor: Color.accent
               font.family: Style.font.family
-              font.pixelSize: Math.round((Style.font.body) * card.zoom)
+              font.pixelSize: Math.round(Style.font.body * card.zoom)
               Keys.onReturnPressed: root.submitText(text)
               Keys.onEnterPressed: root.submitText(text)
               Keys.onEscapePressed: root.escapeTyping()
@@ -788,131 +878,42 @@ Scope {
               textFormat: Text.PlainText
               text: root.postponing ? "Postpone for how many minutes? Enter sends" : "Click here, type your answer, Enter sends"
               font.family: Style.font.family
-              font.pixelSize: Math.round((Style.font.body) * card.zoom)
+              font.pixelSize: Math.round(Style.font.body * card.zoom)
               color: Util.alpha(Color.popups.text, 0.45)
             }
           }
 
-          Text {
-            visible: root.promptKind !== "countdown" && !root.typing && !root.postponing
+          Flow {
             width: parent.width
-            horizontalAlignment: Text.AlignHCenter
+            spacing: Style.space(8)
+            Repeater {
+              model: card.chips
+              KeyChip { required property var modelData; chipData: modelData }
+            }
+          }
+
+          Text {
+            visible: !prompt.bar && !root.typing && !root.postponing
+            width: parent.width
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
             font.family: Style.font.family
-            font.pixelSize: Math.round((Style.font.body) * card.zoom * 0.85)
+            font.pixelSize: Math.round(Style.font.bodySmall * card.zoom)
             color: Util.alpha(Color.popups.text, 0.6)
             text: "Your keyboard stays free. Click this card to answer with keys, or click a button."
           }
 
           Rectangle {
-            id: ctrlBox
             width: parent.width
-            height: Math.max(ctrlRow.implicitHeight, ctrlText.implicitHeight) + Style.space(16)
-            radius: Style.cornerRadius
-            color: root.held ? Util.alpha(Color.accent, 0.25) : Style.normalFill
-            border.width: root.held ? 2 : 1
-            border.color: root.held ? Color.accent : Style.normalBorderColor
-
-            Row {
-              id: ctrlRow
-              anchors.centerIn: parent
-              spacing: Style.space(10)
-              Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: ctrlKey.implicitWidth + Style.space(16)
-                height: ctrlKey.implicitHeight + Style.space(8)
-                radius: Style.cornerRadius
-                color: Color.accent
-                Text {
-                  id: ctrlKey
-                  anchors.centerIn: parent
-                  textFormat: Text.PlainText
-                  text: "Ctrl"
-                  font.family: Style.font.family
-                  font.pixelSize: Math.round((Style.font.body) * card.zoom)
-                  font.bold: true
-                  color: Color.background
-                }
-              }
-              Text {
-                id: ctrlText
-                anchors.verticalCenter: parent.verticalCenter
-                width: ctrlBox.width - ctrlKey.implicitWidth - Style.space(16) - Style.space(10) - Style.space(24)
-                wrapMode: Text.WordWrap
-                textFormat: Text.PlainText
-                font.family: Style.font.family
-                font.pixelSize: Math.round((Style.font.body) * card.zoom)
-                font.bold: true
-                color: Color.popups.text
-                text: root.held
-                  ? "PAUSED. Tap Ctrl again to continue (auto in " + root.holdLeft + " s)"
-                  : "Tap Ctrl to pause the timer and take your time to read"
-              }
-            }
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.act("hold")
-            }
-          }
-
-          Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: Style.space(10)
-
-            Repeater {
-              model: root.promptKind === "countdown"
-                ? (root.postponing
-                  ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
-                  : (root.helpText !== ""
-                    ? [ { key: "Y", text: "I'll help", action: "human" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" } ]
-                    : [ { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" } ]))
-                : root.postponing
-                  ? [ { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
-                : root.typing
-                  ? (root.standalone ? [ { key: "Enter", text: "send", action: "send" }, { key: "Esc", text: root.typeOnly ? "dismiss" : "back", action: "esc" } ] : [ { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? "stop test" : "back", action: "esc" } ])
-                  : root.standalone
-                    ? [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "T", text: "type reply", action: "type" }, { key: "Esc", text: "dismiss", action: "end" } ]
-                    : [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "can't tell", action: "unsure" }, { key: "T", text: "type reply", action: "type" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "stop test", action: "end" } ]
-
-              Rectangle {
-                required property var modelData
-                width: keyRow.implicitWidth + Style.space(20)
-                height: Math.round(Style.spacing.controlHeight * card.zoom)
-                radius: Style.cornerRadius
-                color: hover.containsMouse ? Style.hoverFill : Style.normalFill
-                border.width: 1
-                border.color: Style.normalBorderColor
-
-                Row {
-                  id: keyRow
-                  anchors.centerIn: parent
-                  spacing: Style.space(6)
-                  Text {
-                    textFormat: Text.PlainText
-                    text: modelData.key
-                    font.family: Style.font.family
-                    font.pixelSize: Math.round((Style.font.body) * card.zoom)
-                    font.bold: true
-                    color: Color.accent
-                  }
-                  Text {
-                    textFormat: Text.PlainText
-                    text: modelData.text
-                    font.family: Style.font.family
-                    font.pixelSize: Math.round((Style.font.body) * card.zoom)
-                    color: Color.popups.text
-                  }
-                }
-                MouseArea {
-                  id: hover
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.act(modelData.action)
-                }
-              }
+            height: Math.max(Style.space(3), Style.spacing.xs)
+            color: Util.alpha(Color.popups.text, 0.2)
+            Rectangle {
+              height: parent.height
+              readonly property real total: prompt.bar ? root.countdownTotal : root.askTotal
+              readonly property real remaining: prompt.bar ? root.countdownLeft : root.askLeft
+              width: parent.width * (total > 0 ? remaining / total : 0)
+              color: root.held ? Util.alpha(Color.popups.text, 0.4) : prompt.bar ? Color.urgent : Color.accent
+              Behavior on width { NumberAnimation { duration: 900 } }
             }
           }
         }
