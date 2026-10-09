@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.akton1.background-worker-talk-to-me",
   "name": "Background Worker Talk To Me",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "AktOn1",
   "license": "MIT",
   "description": "Lets an AI agent that tests on your desktop tell you first and ask you quick questions. A heads-up countdown (pause, postpone or cancel), a TESTING badge with the expected time, one-key answers (Y, N, ?) or a typed reply returned to the command line, and a guard that makes agents announce themselves before they touch your windows.",
