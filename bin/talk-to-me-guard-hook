@@ -38,8 +38,16 @@ pre = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:sudo|env|exec|command|nohup|setsid|time)\s+|
 touch = re.compile(pre + r'(?:wtype|ydotool|dotool|dotoolc|omarchy-restart-shell|hyprctl\s+(?:-\S+\s+)*(?:dispatch|reload|keyword))(?:\s|$|;|&|\|)', re.M)
 # windowed launches: Godot binaries and play.sh (unless headless), xdg-open, gtk-launch, omarchy-launch-*
 win = re.compile(pre + r'(?:(?:\S*godot\S*|xdg-open|gtk-launch|omarchy-launch-\S+)|[\w./-]*play\.sh)(?:\s|$|;|&|\|)', re.M | re.I)
+# user-added launchers: one command name per line in guard-commands (# comments allowed)
+extra = []
+try:
+    cfg = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "background-worker-talk-to-me", "guard-commands")
+    extra = [re.escape(l.split("#")[0].strip()) for l in open(cfg) if l.split("#")[0].strip()]
+except Exception:
+    pass
+win_extra = re.compile(pre + r'(?:' + "|".join(extra) + r')(?:\s|$|;|&|\|)', re.M) if extra else None
 headless = re.search(r'--headless|--help|--version|\s-h(?:\s|$)', cmd)
-if not (touch.search(cmd) or (win.search(cmd) and not headless)):
+if not (touch.search(cmd) or ((win.search(cmd) or (win_extra and win_extra.search(cmd))) and not headless)):
     sys.exit(0)
 
 if session_state().get("phase") == "active":

@@ -4,6 +4,25 @@
 
 Omarchy shell plugin that lets a script or AI agent that changes your desktop (moving windows, workspaces, the bar, animations) ask you quick yes/no questions, instead of slow screenshot loops.
 
+## Why you want this
+AI agents that build or tweak your Omarchy desktop (plugins, Hyprland config, bar, animations, games) cannot see what you see. Screenshot loops are slow and often wrong, and an agent that suddenly opens windows or sends keys while you work spoils its own test: a stray click of yours looks like a failed test. This plugin gives you and the agent a short handshake:
+
+- **You know when it starts.** A countdown and an always-visible TESTING banner say "hands off the mouse and keyboard now". You can postpone (P) or cancel (Esc).
+- **The agent gets your eyes.** One key (Y / N / ?) or a typed reply answers "did the window move?" in seconds, instead of a screenshot round trip.
+- **It cannot forget.** A guard hook makes the agent start a session before it touches your desktop (see "Which commands are guarded").
+
+### Use cases
+- Building an Omarchy plugin: the agent reloads the shell, opens your panel and asks "does the popup look right on both monitors?".
+- Tuning Hyprland: workspace rules, window moves, opacity or animation values, with you as the judge ("which of these three looks best?").
+- Testing a game or GUI app: the agent warns you before a window pops up, asks whether it looks right, and does not count your stray click as a bug.
+- Long autonomous runs: you work in another app; the agent posts a status line on the banner, or (experimental) asks a blocking question on screen.
+- Anything where a screenshot cannot show the answer (animation, timing, "feels laggy").
+
+## Which commands are guarded
+The guard is a Claude Code `PreToolUse` hook (`talk-to-me-guard-hook`, installed with `talk-to-me-install-agent guard`). It reads the command the agent is about to run and refuses it, with instructions, until a `talk-to-me start` session is active. It is **not** limited to one app. Built in: `wtype`, `ydotool`, `dotool`, `omarchy-restart-shell`, `hyprctl dispatch|reload|keyword`, and window launchers (`xdg-open`, `gtk-launch`, `omarchy-launch-*`, Godot without `--headless`, `play.sh`). Reads like `hyprctl clients` and headless runs pass.
+
+**Your own apps:** list any command that opens a window, one name per line, in `~/.config/background-worker-talk-to-me/guard-commands` (`#` starts a comment). The agent then gets the same block for it. Launcher scripts in your own projects can call `talk-to-me require` first: exit 99 for an agent run without a session, no effect when you run it by hand. Limits: only Claude Code is hooked (other agents: set `TALK_TO_ME_GUARD=1` with the PATH shims, or follow the instruction block), and a command the guard has never heard of is not caught.
+
 ## The flow
 1. **Countdown.** `talk-to-me start "Desktop testing"` shows a card "Desktop testing is about to start 5 4 3 2 1". It is a heads-up, not a question: if you are at the desk and not ready, press **P** or **Esc**; if you are away, it runs out and the agent continues alone. **Y** exists only when the agent asks for help with `talk-to-me start "title" --help "watch the screen and press Y/N after each window move"`: the card then says "Faster with your help: …" and Y = "I'll help" (human mode, `talk-to-me ask` works). **P** = postpone: type the minutes, Enter sends; the countdown waits while you type, the banner turns into a blue "Testing paused, resumes in M:SS" pill and `talk-to-me start` prints `postpone:<minutes>` (exit code 5). **Esc** = cancel (`cancelled`, exit 4: not now, the agent stops). No key = the agent goes on alone (solo mode; `talk-to-me ask` then prints `timeout` at once, so an agent that wants answers must pass `--help`).
 **Every screen, more time to read.** The countdown and question cards show on every monitor (the keyboard goes to the card on the screen you are working on; the buttons are clickable on any of them). Tap **Ctrl alone** to freeze the countdown or question timer while you read; tap Ctrl again to continue (it resumes by itself after 120 s). Ctrl+P and other Ctrl combinations do not count. `talk-to-me` waits long enough for a hold.
