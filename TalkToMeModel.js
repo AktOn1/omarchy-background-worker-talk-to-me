@@ -79,6 +79,15 @@ function progressText(estimate, elapsed) {
   return "taking longer · +" + remainingText(e - est)
 }
 
+// Banner line under the label: the agent's estimate stays visible next to the live count for the whole test.
+function timeLine(phase, estimate, elapsed) {
+  var est = Math.max(0, Math.round(estimate))
+  if (phase === "countdown") return est > 0 ? "Expected duration: " + estimateLabel(est) : ""
+  if (phase !== "active") return ""
+  if (est <= 0) return progressText(est, elapsed)
+  return "Expected " + estimateLabel(est).replace("about ", "") + "  ·  " + progressText(est, elapsed)
+}
+
 function statusJson(st) {
   return JSON.stringify({
     phase: st.phase,

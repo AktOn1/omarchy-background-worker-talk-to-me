@@ -492,7 +492,18 @@ Scope {
             color: Color.background
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
-            text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo")) + (root.phase === "active" ? "  ·  " + Model.progressText(root.estimateSec, root.elapsedSec) : "")
+            text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo"))
+          }
+          Text {
+            readonly property string line: Model.timeLine(root.phase, root.estimateSec, root.elapsedSec)
+            visible: line !== ""
+            anchors.horizontalCenter: parent.horizontalCenter
+            textFormat: Text.PlainText
+            color: Color.background
+            font.family: Style.font.family
+            font.pixelSize: Style.font.bodySmall
+            font.bold: true
+            text: line
           }
           Text {
             visible: root.sayText !== ""
