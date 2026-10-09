@@ -20,7 +20,8 @@ Usage: talk-to-me-install-agent <command> [args]
   agents             one command for every agent found on this machine: Claude Code, Codex, Gemini CLI, OpenCode
                      (a tool hook that refuses desktop-touching commands without a session) and pi (block only),
                      plus the instruction block in each one's global instructions file. Other agents: use 'block FILE'.
-  agents-remove      undo 'agents' (hooks, OpenCode plugin, shims). Instruction blocks stay; delete them by hand.
+  agents-remove      undo 'agents' (hooks, OpenCode plugin, shims, skill, instruction blocks, talk-to-me link)
+  block-remove FILE  remove the instruction block from FILE
   all FILE           skill + block FILE + guard (Claude Code only)
   status             show what is installed
 The plugin also runs a watcher that needs no setup: it shows an "AGENT ACTIVITY" banner when a window opens from
@@ -43,16 +44,39 @@ install_block() {
   [[ -s $tmp && $(wc -l < "$tmp") -gt 3 ]] || { echo "could not read block from docs/agent-instructions.md" >&2; rm -f "$tmp"; exit 1; }
   mkdir -p "$(dirname "$f")"; touch "$f"
   if grep -qF "$start" "$f"; then
+    grep -qxF "$end" "$f" || { echo "found the start marker but not the end marker in $f; not touching it" >&2; rm -f "$tmp"; exit 1; }
+    local out; out=$(mktemp)
     awk -v s="$start" -v e="$end" -v new="$tmp" '
       $0==s {while ((getline l < new) > 0) print l; skip=1; next}
       $0==e {skip=0; next}
-      !skip' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+      !skip' "$f" > "$out" && cat "$out" > "$f"
+    rm -f "$out"
     echo "block updated in $f"
   else
     { echo; cat "$tmp"; } >> "$f"
     echo "block added to $f"
   fi
   rm -f "$tmp"
+}
+
+remove_block() {
+  local f=${1:?block-remove needs a target file}
+  [[ -f $f ]] && grep -qF "$start" "$f" || return 0
+  grep -qxF "$end" "$f" || { echo "found the start marker but not the end marker in $f; not touching it" >&2; return 1; }
+  local out; out=$(mktemp)
+  awk -v s="$start" -v e="$end" '$0==s {skip=1; next} $0==e {skip=0; next} !skip' "$f" > "$out" && cat "$out" > "$f"
+  rm -f "$out"
+  echo "block removed from $f"
+}
+
+# link_ours SRC DST: symlink only when DST is absent or already our link; never replace somebody's own file
+link_ours() {
+  local src=$1 dst=$2
+  if [[ -e $dst || -L $dst ]] && [[ $(readlink -f "$dst" 2>/dev/null) != "$(readlink -f "$src")" && $(readlink -f "$dst" 2>/dev/null) != "$root/bin/"* ]]; then
+    echo "skipped $dst: something else is already there (move it away if you want the guard shim)" >&2
+    return 0
+  fi
+  ln -sf "$src" "$dst"
 }
 
 settings=${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
@@ -91,8 +115,15 @@ elif action == "add":
 else:
     print("hook already " + ("on" if had else "off") + " in " + path)
     sys.exit(0)
+path = os.path.realpath(path)
 os.makedirs(os.path.dirname(path), exist_ok=True)
-json.dump(data, open(path, "w"), indent=2)
+tmp = path + ".talk-to-me.tmp"
+with open(tmp, "w") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+if os.path.exists(path):
+    shutil.copymode(path, tmp)
+os.replace(tmp, path)
 PY
 }
 
@@ -121,9 +152,9 @@ JS
 install_guard() {
   edit_hook "$settings" add PreToolUse "$claude_matcher"
   mkdir -p "$bindir"
-  ln -sf "$root/bin/talk-to-me" "$bindir/talk-to-me"
-  for n in "${guarded[@]}"; do ln -sf "$root/bin/talk-to-me-guard" "$bindir/$n"; done
-  echo "linked talk-to-me and guard (${guarded[*]}) into $bindir"
+  link_ours "$root/bin/talk-to-me" "$bindir/talk-to-me"
+  for n in "${guarded[@]}"; do link_ours "$root/bin/talk-to-me-guard" "$bindir/$n"; done
+  echo "linked talk-to-me and guard (${guarded[*]}) into $bindir (existing files of yours are left alone)"
   case ":$PATH:" in *":$bindir:"*) ;; *) echo "warning: $bindir is not in PATH" >&2 ;; esac
 }
 
@@ -154,7 +185,7 @@ agents_install() {
   if [[ -d $pi_dir ]]; then
     install_block "$pi_dir/AGENTS.md"
   fi
-  mkdir -p "$bindir"; ln -sf "$root/bin/talk-to-me" "$bindir/talk-to-me"
+  mkdir -p "$bindir"; link_ours "$root/bin/talk-to-me" "$bindir/talk-to-me"
   echo "Done. Hooks only apply to NEW agent sessions. Agents without a hook here (pi, crush, copilot, ...) rely on the"
   echo "instruction block, the shims and the always-on watcher (banner when an agent opens a window)."
   echo "Other agent? Add the block to its instructions file:  talk-to-me-install-agent block FILE"
@@ -166,6 +197,13 @@ agents_remove() {
   edit_hook "$gemini_settings" remove BeforeTool "$gemini_matcher" 10000
   rm -f "$(opencode_plugin)" && echo "opencode plugin removed"
   remove_guard
+  [[ $(readlink -f "$bindir/talk-to-me" 2>/dev/null) == "$root/bin/talk-to-me" ]] && rm "$bindir/talk-to-me" && echo "removed $bindir/talk-to-me"
+  rm -rf "$HOME/.claude/skills/background-worker-talk-to-me" && echo "skill removed"
+  local f
+  for f in "$HOME/.claude/CLAUDE.md" "$(dirname "$codex_hooks")/AGENTS.md" "$(dirname "$gemini_settings")/GEMINI.md" "$opencode_dir/AGENTS.md" "$pi_dir/AGENTS.md"; do
+    remove_block "$f" || true
+  done
+  echo "Left on purpose: *.talk-to-me-backup copies of the config files this script edited (delete them when you are happy)."
 }
 
 status() {
@@ -187,6 +225,7 @@ status() {
 case ${1:-} in
   skill) install_skill "${2:-}" ;;
   block) install_block "${2:-}" ;;
+  block-remove) remove_block "${2:-}" ;;
   guard) install_guard ;;
   guard-remove) remove_guard ;;
   agents) agents_install ;;

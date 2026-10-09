@@ -13,6 +13,7 @@ CLI = os.path.join(HERE, "talk-to-me")
 CONF_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "background-worker-talk-to-me")
 RUNTIME = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid(), "talk-to-me")
 
+INTERPRETERS = {"node", "nodejs", "bun", "deno", "python", "python3", "npx", "uv", "uvx"}
 AGENTS = {
     "claude", "claude-code", "opencode", "codex", "gemini", "copilot", "crush", "grok", "openclaw", "cursor-agent",
     "hermes", "muse", "omp", "pi", "aider", "goose",
@@ -67,8 +68,10 @@ def agent_of(pid, names):
     seen = 0
     while pid > 1 and seen < 40:
         comm = read("/proc/%d/comm" % pid).decode(errors="replace").strip()
-        args = [os.path.basename(a.decode(errors="replace")) for a in read("/proc/%d/cmdline" % pid).split(b"\0")[:3] if a]
-        for cand in [comm] + args:
+        args = [os.path.basename(a.decode(errors="replace")) for a in read("/proc/%d/cmdline" % pid).split(b"\0")[:2] if a]
+        # the program itself; its first argument only when the program is an interpreter (node claude.js, python aider)
+        cands = [comm] + args[:1] + (args[1:2] if args and args[0] in INTERPRETERS else [])
+        for cand in cands:
             cand = cand.removesuffix(".js").removesuffix(".mjs")
             if cand in names:
                 return cand
@@ -103,7 +106,10 @@ def window_info(address):
 def log(line):
     try:
         os.makedirs(RUNTIME, mode=0o700, exist_ok=True)
-        with open(os.path.join(RUNTIME, "agent-activity.log"), "a") as f:
+        path = os.path.join(RUNTIME, "agent-activity.log")
+        if os.path.exists(path) and os.path.getsize(path) > 65536:
+            os.remove(path)
+        with open(path, "a") as f:
             f.write(time.strftime("%H:%M:%S ") + line + "\n")
     except OSError:
         pass
@@ -123,14 +129,17 @@ def handle_open(payload, names):
         return
     cls = cls or parts[2]
     log("window %s opened by agent %s (pid %d), no session" % (cls, agent, pid))
-    subprocess.run([CLI, "notice", "An agent opened a window (%s). Hands off for a moment." % cls[:40]], capture_output=True, timeout=5)
+    try:
+        subprocess.run([CLI, "notice", "An agent opened a window. Hands off for a moment."], capture_output=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def claim_pidfile():
     os.makedirs(RUNTIME, mode=0o700, exist_ok=True)
     path = os.path.join(RUNTIME, "watch.pid")
     old = read(path).decode().strip()
-    if old.isdigit() and int(old) != os.getpid() and b"talk-to-me-watch" in read("/proc/%s/cmdline" % old):
+    if old.isdigit() and int(old) != os.getpid() and b"talk-to-me-watch" in read("/proc/%s/cmdline" % old) and b"python" in read("/proc/%s/cmdline" % old):
         try:
             os.kill(int(old), 15)
             time.sleep(0.3)

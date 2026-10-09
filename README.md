@@ -2,7 +2,7 @@
 
 <a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
-Omarchy shell plugin that lets a script or AI agent that changes your desktop (moving windows, workspaces, the bar, animations) ask you quick yes/no questions, instead of slow screenshot loops.
+Omarchy shell plugin for working with AI agents. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Y / N / ? or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
 
 ## Why you want this
 AI agents that build or tweak your Omarchy desktop (plugins, Hyprland config, bar, animations, games) cannot see what you see. Screenshot loops are slow and often wrong, and an agent that suddenly opens windows or sends keys while you work spoils its own test: a stray click of yours looks like a failed test. This plugin gives you and the agent a short handshake:
@@ -40,7 +40,7 @@ A session (countdown + banner) is for work that uses **your** screen, keyboard o
 ## Works with any agent
 Three layers, from "needs nothing" to "needs a hook". Omarchy can launch Claude Code, Codex, Gemini CLI, OpenCode, pi, Crush, Copilot, Cursor, Grok and more, so the plugin does not depend on one of them.
 
-1. **Always-on watcher (any agent, no setup).** The plugin watches Hyprland's window events. When a window opens whose process (or one of its parents) is an agent, or whose environment carries an agent marker (`AI_AGENT`, `CLAUDECODE`, `OPENCODE`, `GEMINI_CLI`, `CODEX_*`, ...), and no session is active, you get an "AGENT ACTIVITY" banner on every screen for 12 s, so you know to keep your hands off. It only checks whether an agent marker variable is set and never stores or sends environment contents. It cannot stop the agent, and it only sees windows opened from an agent's own commands (an app that reuses an already running instance, or one started by `hyprctl dispatch exec`, is not attributed). Switch it off with `talk-to-me settings set watch off`; list an unusual agent in `~/.config/background-worker-talk-to-me/agent-processes` (one process name per line).
+1. **Always-on watcher (any agent, no setup).** The plugin watches Hyprland's window events. When a window opens whose process (or one of its parents) is an agent, or whose environment carries an agent marker (`AI_AGENT`, `CLAUDECODE`, `OPENCODE`, `GEMINI_CLI`, `CODEX_*`, ...), and no session is active, you get an "AGENT ACTIVITY" banner on every screen for 12 s, so you know to keep your hands off. It only checks whether an agent marker variable is set; no environment value is stored or sent (the log keeps the window class, agent name and pid, see Install). It cannot stop the agent, and it only sees windows opened from an agent's own commands (an app that reuses an already running instance, or one started by `hyprctl dispatch exec`, is not attributed). Switch it off with `talk-to-me settings set watch off`; list an unusual agent in `~/.config/background-worker-talk-to-me/agent-processes` (one process name per line).
 2. **Tool hook (agents that have one).** `talk-to-me-install-agent agents` installs a pre-tool hook for every agent found on the machine: Claude Code (`~/.claude/settings.json`), Codex (`~/.codex/hooks.json`), Gemini CLI (`~/.gemini/settings.json`) and OpenCode (a plugin in `~/.config/opencode/plugins/`). The hook refuses a command that touches your desktop, with instructions, until a `talk-to-me start` session is active. Tested live: Claude Code and OpenCode. Codex and Gemini CLI use the same hook protocol (JSON in, exit code 2 blocks) and are tested with simulated calls only.
 3. **Instructions (every agent).** The same command adds the instruction block to each agent's global instructions file (`CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, `~/.config/opencode/AGENTS.md`, `~/.pi/agent/AGENTS.md`). Any other agent: `talk-to-me-install-agent block FILE`.
 
@@ -68,13 +68,15 @@ The keyboard is grabbed only during the short start countdown (it needs it to he
 
 ## Commands
 ```
-talk-to-me start [TITLE] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 10 s, 20 min)
+talk-to-me start [TITLE] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN] [--no-shield]   -> human | solo | cancelled | postpone:<min>   (default 10 s, 20 min)
 talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended  (default 60 s, 120 s with --text)
 talk-to-me question "QUESTION" [--text] [--timeout SEC]   EXPERIMENTAL, off by default -> yes | no | unsure | text:<typed> | dismissed | timeout | busy | disabled | toosoon  (default 120 s)
 talk-to-me settings [get KEY | set KEY VALUE | reset [KEY]]   list or change settings
 talk-to-me say "TEXT"                                     status line on the banner for 8 s, no answer
 talk-to-me eta DUR                                        revise the expected remaining time (90s, 3m, or minutes)
 talk-to-me end                                            end the session
+talk-to-me notice "TEXT"                                  show an "AGENT ACTIVITY" notice for a few seconds (the watcher uses it)
+talk-to-me require [WHAT]                                 for launcher scripts: exit 99 (agent run, no session) or 0; never blocks a human
 talk-to-me status                                         JSON: phase, mode, title, question, seconds left, estimateSec, elapsedSec
 ```
 Exit codes: 0 ok, 1 error (shell not running, plugin not loaded), 3 no session, 4 you pressed Esc (`cancelled` / `ended` / `dismissed`), 5 you pressed P (`postpone:<min>`), 6 `talk-to-me question` not allowed (`disabled`, `toosoon` or `busy`).
@@ -91,7 +93,7 @@ Stored in `~/.config/background-worker-talk-to-me/settings.conf` (plain `key=val
 | `notice-seconds` | 3-120 s | 12 | how long that banner stays |
 | `question-timeout` | 3-600 s | 120 | how long a question card stays |
 | `question-gap` | 0-3600 s | 60 | minimum time between two questions |
-| `countdown` | 1-30 s | 5 | start countdown |
+| `countdown` | 1-30 s | 10 | start countdown |
 | `max` | 1-240 min | 20 | session time limit |
 | `ask-timeout` | 3-600 s | 60 | `talk-to-me ask` |
 | `text-timeout` | 3-600 s | 120 | `talk-to-me ask --text` |
@@ -101,7 +103,12 @@ Stored in `~/.config/background-worker-talk-to-me/settings.conf` (plain `key=val
 omarchy plugin add https://github.com/AktOn1/omarchy-background-worker-talk-to-me.git --enable        # or copy this folder to ~/.config/omarchy/plugins/io.github.akton1.background-worker-talk-to-me/
 ln -s ~/.config/omarchy/plugins/io.github.akton1.background-worker-talk-to-me/bin/talk-to-me ~/.local/bin/talk-to-me
 ```
-Requires `omarchy-shell` running. No network, no sudo, no changes to your config. State: short-lived result files in `$XDG_RUNTIME_DIR/talk-to-me/` (removed by `talk-to-me`, gone at logout).
+Requires `omarchy-shell` running, plus `python3` and `hyprctl` (both normally present on Omarchy) for the agent watcher.
+
+**What it does on your machine.** No network. The plugin itself changes none of your config files; the opt-in installer below does, and says so.
+- *Files:* short-lived result files, `last-question`, `watch.pid` and a small `agent-activity.log` (capped at 64 KB, one line per window an agent opened: time, window class, agent name, pid) in `$XDG_RUNTIME_DIR/talk-to-me/` (gone at logout); your settings in `~/.config/background-worker-talk-to-me/settings.conf`.
+- *Processes:* the shell runs `bin/talk-to-me-watch` (python3). It reads Hyprland's event socket and, for a window that just opened, runs `hyprctl -j clients|monitors`, `talk-to-me status` and reads that process and its parents' `/proc/<pid>/{comm,cmdline,environ}` (same user only, read-only) to see whether an agent started it. It checks only whether an agent marker variable (`AI_AGENT`, `CLAUDECODE`, ...) is set; no environment value is stored or sent. `talk-to-me start` also looks for a password prompt (`pgrep hyprlock`, `hyprctl layers`) and waits up to 2 minutes for it to go away, so the start card never takes the keyboard from a password dialog.
+- *Agent installer (opt-in, never automatic):* `talk-to-me-install-agent agents` edits `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/settings.json` (adds a pre-tool hook), writes an OpenCode plugin, appends an instruction block to each agent's instructions file, copies a Claude Code skill, and links `~/.local/bin/talk-to-me`. It keeps a `*.talk-to-me-backup` copy of each JSON file it edits and never replaces a file of yours that is already in `~/.local/bin`. `talk-to-me-install-agent agents-remove` undoes all of it.
 
 ## Try it with an agent
 Open an agent (`omarchy agent`, Claude Code, ...) with the instructions installed (see "For agents") and paste one of these. Each one exercises a different feature.
@@ -129,9 +136,10 @@ While it runs: at the first countdown the card shows "Faster with your help: ...
 Tips while testing: tap **Ctrl alone** to freeze a timer, **T** types a reply, **Esc** stops. `talk-to-me status` shows the current state.
 
 ## Remove
+If you ran the agent installer, undo it first (the hooks point at this plugin's scripts): `talk-to-me-install-agent agents-remove` (hooks, OpenCode plugin, skill, instruction blocks, links; the `*.talk-to-me-backup` copies are left for you to delete).
 ```
 omarchy plugin disable io.github.akton1.background-worker-talk-to-me && omarchy plugin remove io.github.akton1.background-worker-talk-to-me
-rm -f ~/.local/bin/talk-to-me; rm -rf "$XDG_RUNTIME_DIR/talk-to-me"
+rm -f ~/.local/bin/talk-to-me; rm -rf "$XDG_RUNTIME_DIR/talk-to-me" ~/.config/background-worker-talk-to-me
 ```
 
 ## For agents

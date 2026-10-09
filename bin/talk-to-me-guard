@@ -28,8 +28,8 @@ if (( touches && in_agent )) && "$(dirname "$self")/talk-to-me-guard-hook" --shi
 
 # once the outer command passed the check, commands it spawns (omarchy-restart-shell calls hyprctl while the shell is down) pass too
 if (( touches && in_agent )) && [[ -z ${TALK_TO_ME_GUARD_OFF:-} && -z ${TALK_TO_ME_GUARD_CHECKED:-} ]]; then
-  state=$("$(dirname "$self")/talk-to-me" status 2>/dev/null)
-  if [[ $state != *'"phase":"active"'* ]]; then
+  # plugin not running (status fails): nothing to ask, so let the command through instead of deadlocking
+  if state=$("$(dirname "$self")/talk-to-me" status 2>/dev/null) && [[ $state != *'"phase":"active"'* ]]; then
     cat >&2 <<MSG
 $name blocked: this touches the user's live desktop and no Background Worker Talk To Me session is active.
 Run:  talk-to-me start "<your name>: <what you will do>"   (10 s countdown + TESTING banner)

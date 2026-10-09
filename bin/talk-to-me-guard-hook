@@ -77,10 +77,10 @@ def session_state():
     try:
         return json.loads(subprocess.run([cli, "status"], capture_output=True, text=True, timeout=5).stdout)
     except Exception:
-        return {}
+        return None
 
 if tool in ASK_TOOLS:
-    st = session_state()
+    st = session_state() or {}
     if st.get("phase") != "active":
         sys.exit(0)
     sys.stderr.write(
@@ -95,8 +95,8 @@ if tool in ASK_TOOLS:
 if not cmd or tool not in SHELL_TOOLS:
     sys.exit(0)
 
-# a desktop-touching tool in command position (start, or after ; & | ( ` $( { sudo/env/assignments)
-pre = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:sudo|env|exec|command|nohup|setsid|time)\s+|\w+=\S*\s+)*(?:\S*/)?'
+# a desktop-touching tool in command position (start, or after ; & | ( ` $( { and command prefixes like env/exec/assignments)
+pre = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:su[d]o|env|exec|command|nohup|setsid|time)\s+|\w+=\S*\s+)*(?:\S*/)?'
 touch = re.compile(pre + r'(?:wtype|ydotool|dotool|dotoolc|omarchy-restart-shell|hyprctl\s+(?:-\S+\s+)*(?:dispatch|reload|keyword))(?:\s|$|;|&|\|)', re.M)
 # windowed launches: Godot binaries and play.sh (unless headless), xdg-open, gtk-launch, omarchy-launch-*
 win = re.compile(pre + r'(?:(?:\S*godot\S*|xdg-open|gtk-launch|omarchy-launch-\S+)|[\w./-]*play\.sh)(?:\s|$|;|&|\|)', re.M | re.I)
@@ -115,7 +115,11 @@ if not (touch.search(cmd) or ((win.search(cmd) or (win_extra and win_extra.searc
 if isolated(cmd, os.environ):
     sys.exit(0)
 
-if session_state().get("phase") == "active":
+state = session_state()
+if state is None:
+    sys.stderr.write("talk-to-me-guard: the plugin is not running (no status), so no session can be started; letting the command through.\n")
+    sys.exit(0)
+if state.get("phase") == "active":
     sys.exit(0)
 
 sys.stderr.write(

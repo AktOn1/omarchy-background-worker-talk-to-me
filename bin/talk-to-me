@@ -189,6 +189,10 @@ to_seconds() {
   esac
 }
 
+# a password prompt (polkit dialog, screen lock) must never lose the keyboard to our start card: wait for it, at most 2 minutes
+password_prompt_up() { pgrep -x hyprlock >/dev/null 2>&1 || command hyprctl layers 2>/dev/null | grep -q 'namespace: omarchy-polkit'; }
+wait_password_prompt() { local n=0; while password_prompt_up && (( n < 120 )); do sleep 1; n=$((n + 1)); done; }
+
 new_id() { head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 
 cleanup() {
@@ -237,6 +241,7 @@ case $cmd in
     ID=$(new_id)
     trap on_signal INT TERM
     trap cleanup EXIT
+    wait_password_prompt
     call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" "$help" "$estimate" "$([[ $shield == off ]] && echo 0 || echo 1)" >/dev/null
     # typing a postpone time (P) pauses the countdown for up to 60 s
     result=$(wait_result $((countdown + 70 + 125))) || { ipc cancel "$ID" >/dev/null 2>&1; die "no answer from the plugin"; }
@@ -385,7 +390,8 @@ case $cmd in
   require)
     [[ -n ${AI_AGENT:-} || -n ${PAPERCLIP_RUN_ID:-} || -n ${CLAUDECODE:-} || -n ${OPENCODE:-} || -n ${GEMINI_CLI:-} || -n ${CODEX_THREAD_ID:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] || exit 0
     [[ -z ${TALK_TO_ME_GUARD_OFF:-} ]] || exit 0
-    [[ $("$0" status 2>/dev/null) == *'"phase":"active"'* ]] && exit 0
+    state=$("$0" status 2>/dev/null) || exit 0
+    [[ $state == *'"phase":"active"'* ]] && exit 0
     cat >&2 <<MSG
 Blocked: ${1:-this} opens a window on the user's live desktop and no Background Worker Talk To Me session is active.
 Run:  talk-to-me start "<your name>: <what you will do>" --help "watch the screen and press Y/N after each change"

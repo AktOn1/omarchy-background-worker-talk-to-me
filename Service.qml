@@ -463,7 +463,7 @@ Scope {
   RegularExpressionValidator { id: minutesValidator; regularExpression: /[0-9]{0,4}/ }
 
   // Agent watcher: tells the user when any agent (Claude, Codex, OpenCode, Gemini, ...) opens a window with no session.
-  readonly property string watchScript: Qt.resolvedUrl("bin/talk-to-me-watch").toString().replace(/^file:\/\//, "")
+  readonly property string watchScript: decodeURIComponent(Qt.resolvedUrl("bin/talk-to-me-watch").toString().replace(/^file:\/\//, ""))
   Process {
     id: watcher
     command: [root.watchScript]
