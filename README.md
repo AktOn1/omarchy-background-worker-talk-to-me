@@ -7,9 +7,12 @@ Omarchy shell plugin that lets a script or AI agent that changes your desktop (m
 ## Why you want this
 AI agents that build or tweak your Omarchy desktop (plugins, Hyprland config, bar, animations, games) cannot see what you see. Screenshot loops are slow and often wrong, and an agent that suddenly opens windows or sends keys while you work spoils its own test: a stray click of yours looks like a failed test. This plugin gives you and the agent a short handshake:
 
-- **You know when it starts.** A countdown and an always-visible TESTING banner say "hands off the mouse and keyboard now". You can postpone (P) or cancel (Esc).
+- **You know when it starts, and about how long it takes.** A countdown and an always-visible TESTING banner say "hands off the mouse and keyboard now". The agent gives an estimate (`--estimate 3m`): the card shows "Expected duration: about 3 min", the banner counts "about 2:10 left" and says "taking longer" when it overruns. You can postpone (P) or cancel (Esc).
 - **The agent gets your eyes.** One key (Y / N / ?) or a typed reply answers "did the window move?" in seconds, instead of a screenshot round trip.
 - **It cannot forget.** A guard hook makes the agent start a session before it touches your desktop (see "Which commands are guarded").
+
+### Only when you or the test could disturb each other
+A session (countdown + banner) is for work that uses **your** screen, keyboard or mouse: the test needs your display or input focus, or your clicks would spoil it, or it moves your windows. Work that cannot touch you needs none: files and code, `--headless` runs, a **nested compositor on a virtual `HEADLESS-n` monitor** (screenshots of a scratch desktop), commands aimed at another compositor (their own `HYPRLAND_INSTANCE_SIGNATURE` / `WAYLAND_DISPLAY`). The guard hook lets those pass, the agent watcher ignores windows that open on a `HEADLESS-n` monitor, and an agent can mark a command `TALK_TO_ME_ISOLATED=1 <command>` when it knows it is isolated. If a window opens on a monitor you look at, it is not isolated.
 
 ### Use cases
 - Building an Omarchy plugin: the agent reloads the shell, opens your panel and asks "does the popup look right on both monitors?".
@@ -59,13 +62,14 @@ The keyboard is grabbed only while the countdown card or a question (including i
 
 ## Commands
 ```
-talk-to-me start [TITLE] [--help TEXT] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 5 s, 20 min)
+talk-to-me start [TITLE] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>   (default 5 s, 20 min)
 talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended  (default 60 s, 120 s with --text)
 talk-to-me question "QUESTION" [--text] [--timeout SEC]   EXPERIMENTAL, off by default -> yes | no | unsure | text:<typed> | dismissed | timeout | busy | disabled | toosoon  (default 120 s)
 talk-to-me settings [get KEY | set KEY VALUE | reset [KEY]]   list or change settings
 talk-to-me say "TEXT"                                     status line on the banner for 8 s, no answer
+talk-to-me eta DUR                                        revise the expected remaining time (90s, 3m, or minutes)
 talk-to-me end                                            end the session
-talk-to-me status                                         JSON: phase, mode, title, question, seconds left
+talk-to-me status                                         JSON: phase, mode, title, question, seconds left, estimateSec, elapsedSec
 ```
 Exit codes: 0 ok, 1 error (shell not running, plugin not loaded), 3 no session, 4 you pressed Esc (`cancelled` / `ended` / `dismissed`), 5 you pressed P (`postpone:<min>`), 6 `talk-to-me question` not allowed (`disabled`, `toosoon` or `busy`).
 In solo mode `talk-to-me ask` prints `timeout` at once (nobody is there to answer). Only one question at a time; a new one replaces the old.

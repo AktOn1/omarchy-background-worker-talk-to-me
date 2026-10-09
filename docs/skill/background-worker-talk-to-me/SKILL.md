@@ -18,7 +18,7 @@ desktop and lets you ask the human a yes/no question that they answer with Y / N
 visual result was not human-confirmed.
 
 ## Procedure
-1. `talk-to-me start "short title"` before the first visible change (5 s countdown, a heads-up only: the
+1. `talk-to-me start "short title" --estimate 3m` before the first visible change (always give an honest `--estimate`: `90s`, `3m` or minutes; the card shows it, the banner counts it down and says "taking longer" when you overrun; revise with `talk-to-me eta 2m`) (5 s countdown, a heads-up only: the
    human postpones or cancels it if they are at the desk, otherwise it runs out and you continue
    alone in solo mode, where `talk-to-me ask` prints `timeout` at once). To get answers, ask for help:
    `talk-to-me start "short title" --help "watch the screen and press Y/N after each window move"`; the card
@@ -55,4 +55,4 @@ say what you assumed. Settings: `talk-to-me settings`.
 - Run `talk-to-me ask` when nothing visible changed, or in a loop to poll the human.
 - Start a second session while one is open (`talk-to-me end` first).
 - Treat `timeout` as yes.
-- Use it for headless or purely code-level work.
+- Use it for headless or purely code-level work, a nested compositor on a virtual `HEADLESS-n` monitor, or commands aimed at another compositor: the human's keyboard and mouse cannot disturb those and they cannot disturb the human. Use it only when your test and the human's screen, keyboard or mouse could get in each other's way. If the guard still blocks an isolated command, prefix `TALK_TO_ME_ISOLATED=1`.

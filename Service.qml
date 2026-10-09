@@ -5,11 +5,11 @@
 // never takes the keyboard.
 //
 // IPC (target "talk-to-me"; the `talk-to-me` command wraps these and polls the result files):
-//   start <id> <label> <countdownSec> <maxMinutes> <help>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
+//   start <id> <label> <countdownSec> <maxMinutes> <help> <estimateSec>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
 //   ask <id> <question> <timeoutSec> <choice|text>   result file: yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 //   quick <id> <question> <timeoutSec> <choice|text>  (experimental) like ask, but also works with no session: a plain
 //                                                question card, no banner. result file adds: busy | dismissed
-//   say <text> | end | cancel <id> | status | ping
+//   say <text> | eta <seconds> | end | cancel <id> | status | ping
 //   notice <text> <seconds>   "agent activity" banner with no session (sent by bin/talk-to-me-watch)
 // Result files: $XDG_RUNTIME_DIR/talk-to-me/<id>.result (the id is validated, no paths from callers).
 
@@ -58,6 +58,9 @@ Scope {
   // banner shown when an agent touches the desktop without a session (see bin/talk-to-me-watch)
   property string noticeText: ""
   property double sessionEnd: 0
+  property int estimateSec: 0
+  property double activeStart: 0
+  property int elapsedSec: 0
   property int sessionLeft: 0
   // Ctrl alone freezes the countdown / question timer so the text can be read (auto-resumes)
   property bool held: false
@@ -110,7 +113,7 @@ Scope {
 
   // ---- session ----------------------------------------------------------------
 
-  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp) {
+  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp, rawEstimate) {
     const cid = Model.cleanId(id)
     if (!cid) return "error:bad id"
     if (root.runtimeBase === "") return "error:no XDG_RUNTIME_DIR"
@@ -123,6 +126,8 @@ Scope {
     root.countdownLeft = root.countdownTotal
     const maxMin = Model.clampInt(rawMax, 1, 240, Model.DEFAULTS.maxMinutes)
     root.sessionEnd = Date.now() + (root.countdownTotal + maxMin * 60) * 1000
+    root.estimateSec = Model.clampInt(rawEstimate, 0, maxMin * 60, 0)
+    root.elapsedSec = 0
     root.mode = ""
     root.phase = "countdown"
     ticker.restart()
@@ -134,6 +139,8 @@ Scope {
     root.writeResult(root.startId, nextMode)
     root.startId = ""
     root.mode = nextMode
+    root.activeStart = Date.now()
+    root.elapsedSec = 0
     root.sessionLeft = Math.max(0, Math.round((root.sessionEnd - Date.now()) / 1000))
     root.phase = "active"
   }
@@ -152,6 +159,8 @@ Scope {
     root.label = ""
     root.helpText = ""
     root.sessionLeft = 0
+    root.estimateSec = 0
+    root.elapsedSec = 0
     root.phase = "idle"
     ticker.stop()
     sayTimer.stop()
@@ -264,6 +273,14 @@ Scope {
     return "ok"
   }
 
+  // Revises the expected duration (seconds from now on, 0 = unknown) while a test runs.
+  function eta(rawSeconds) {
+    if (root.phase !== "active" && root.phase !== "countdown") return "error:no session"
+    const sec = Model.clampInt(rawSeconds, 0, 240 * 60, 0)
+    root.estimateSec = sec > 0 ? root.elapsedSec + sec : 0
+    return "ok"
+  }
+
   function notice(rawText, rawSeconds) {
     const text = Model.cleanText(rawText, 160)
     if (text === "") return "error:empty"
@@ -288,7 +305,9 @@ Scope {
       mode: root.mode,
       label: root.label,
       question: root.question,
-      remainingSec: root.phase === "paused" ? root.pausedLeft : root.sessionLeft
+      remainingSec: root.phase === "paused" ? root.pausedLeft : root.sessionLeft,
+      estimateSec: root.estimateSec,
+      elapsedSec: root.elapsedSec
     })
   }
 
@@ -365,6 +384,7 @@ Scope {
       if (root.phase === "idle" && root.askId === "") { ticker.stop(); return }
       if (root.held && root.promptOpen) {
         root.sessionEnd += 1000
+        root.activeStart += 1000
         root.holdLeft -= 1
         if (root.holdLeft <= 0) root.held = false
         return
@@ -388,6 +408,7 @@ Scope {
         if (root.askLeft <= 0) root.answer("timeout")
       }
       root.sessionLeft = Math.max(0, Math.round((root.sessionEnd - Date.now()) / 1000))
+      if (root.phase === "active") root.elapsedSec = Math.max(0, Math.round((Date.now() - root.activeStart) / 1000))
       if (root.phase !== "idle" && root.sessionLeft <= 0) root.endSession("cancelled", "ended")
     }
   }
@@ -410,10 +431,11 @@ Scope {
 
   IpcHandler {
     target: "talk-to-me"
-    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string): string { return root.startSession(id, label, countdown, maxMinutes, help) }
+    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string, estimate: string): string { return root.startSession(id, label, countdown, maxMinutes, help, estimate) }
     function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
     function quick(id: string, question: string, timeout: string, kind: string): string { return root.quickQuestion(id, question, timeout, kind) }
     function say(text: string): string { return root.say(text) }
+    function eta(seconds: string): string { return root.eta(seconds) }
     function notice(text: string, seconds: string): string { return root.notice(text, seconds) }
     function end(): string { root.endSession("cancelled", "ended"); return "ok" }
     function cancel(id: string): string { return root.cancel(id) }
@@ -470,7 +492,7 @@ Scope {
             color: Color.background
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
-            text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo")) + (root.phase === "active" ? "  ·  " + Model.remainingText(root.sessionLeft) : "")
+            text: root.phase === "idle" ? root.noticeText : root.phase === "paused" ? root.label + "  ·  resumes in " + Model.remainingText(root.pausedLeft) : root.label + (root.mode === "" ? "" : "  ·  " + (root.mode === "human" ? "you are helping" : "solo")) + (root.phase === "active" ? "  ·  " + Model.progressText(root.estimateSec, root.elapsedSec) : "")
           }
           Text {
             visible: root.sayText !== ""
@@ -605,6 +627,17 @@ Scope {
             font.family: Style.font.family
             font.pixelSize: Style.font.body
             text: "Faster with your help: " + root.helpText
+          }
+
+          Text {
+            visible: root.promptKind === "countdown" && root.estimateSec > 0
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            textFormat: Text.PlainText
+            color: Color.popups.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            text: "Expected duration: " + Model.estimateLabel(root.estimateSec)
           }
 
           Rectangle {

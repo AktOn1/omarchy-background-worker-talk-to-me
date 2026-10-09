@@ -1,9 +1,10 @@
 #!/bin/bash
 # talk-to-me: command line for the Background Worker Talk To Me Omarchy shell plugin.
-# Usage: talk-to-me start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
+# Usage: talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN]   -> human | solo | cancelled | postpone:<min>
 #        talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 #        talk-to-me question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
 #        talk-to-me say "TEXT"
+#        talk-to-me eta DUR       (revise the expected remaining time: 90s, 3m or 3 = minutes)
 #        talk-to-me notice "TEXT" [--seconds N]   (banner without a session; the agent watcher uses it)
 #        talk-to-me end
 #        talk-to-me status
@@ -14,7 +15,7 @@ usage() {
   cat <<'USAGE'
 talk-to-me: Background Worker Talk To Me
 
-  talk-to-me start [LABEL] [--help TEXT] [--countdown SEC] [--max MIN]
+  talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN]
       Countdown banner (default 5 s). It is a heads-up, not a question: the person who is at the
       desk postpones (P) or cancels (Esc), otherwise it runs out and you continue alone ("solo";
       "talk-to-me ask" then prints "timeout" at once). No Y key unless you pass --help.
@@ -22,6 +23,9 @@ talk-to-me: Background Worker Talk To Me
       ("watch the screen and press Y/N after each window move"). The card then shows it with
       a Y key. Prints "human" when they pressed Y (now "talk-to-me ask" works), "solo" when nobody did,
       "cancelled" when they pressed Esc (not now: stop, touch nothing).
+      --estimate DUR: how long you expect to need ("90s", "3m", or a bare number = minutes). The countdown card
+      shows "Expected duration" and the banner counts "about 2:10 left", then "taking longer". Always give one:
+      the person decides from it whether to postpone. Without it the banner only shows the time so far.
       P = the person wants to test later: they type minutes, the banner turns into a "paused"
       pill and this prints postpone:<minutes> (exit 5). Wait that long, then run talk-to-me start again.
       Exit codes: 0 human/solo, 1 error, 4 cancelled, 5 postponed.
@@ -54,6 +58,7 @@ talk-to-me: Background Worker Talk To Me
         text-timeout      SEC      default for talk-to-me ask --text (default 120, 3-600)
       Command-line options (--countdown, --max, --timeout) still win over settings.
   talk-to-me say "TEXT"      Short status line on the banner (no answer needed).
+  talk-to-me eta DUR         Revise the expected remaining time while a test runs (same units as --estimate).
   talk-to-me notice "TEXT" [--seconds N]
       A short "agent activity" banner on every screen, no session needed (default 12 s, click to dismiss).
       The agent watcher (talk-to-me-watch) shows it when a window opens from an agent run with no session.
@@ -168,6 +173,16 @@ setting_reset() {
   mv "$tmp" "$CONF_FILE"
 }
 
+# "90s" -> 90, "3m" or "3" -> 180 seconds; dies on anything else.
+to_seconds() {
+  local v=$1
+  case $v in
+    *s) v=${v%s}; [[ $v =~ ^[0-9]+$ ]] || die "bad duration '$1' (use 90s, 3m or minutes)"; echo "$v" ;;
+    *m) v=${v%m}; [[ $v =~ ^[0-9]+$ ]] || die "bad duration '$1' (use 90s, 3m or minutes)"; echo $((v * 60)) ;;
+    *) [[ $v =~ ^[0-9]+$ ]] || die "bad duration '$1' (use 90s, 3m or minutes)"; echo $((v * 60)) ;;
+  esac
+}
+
 new_id() { head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 
 cleanup() {
@@ -200,10 +215,11 @@ case $cmd in
   -h|--help|help) usage ;;
 
   start)
-    label="" help="" countdown=$(setting_get countdown) max=$(setting_get max)
+    label="" help="" estimate=0 countdown=$(setting_get countdown) max=$(setting_get max)
     while (( $# )); do
       case $1 in
         --help) help=${2:?--help needs text}; shift 2 ;;
+        --estimate) estimate=$(to_seconds "${2:?--estimate needs a duration}") || exit 1; shift 2 ;;
         --countdown) countdown=${2:?--countdown needs seconds}; shift 2 ;;
         --max) max=${2:?--max needs minutes}; shift 2 ;;
         *) label=$1; shift ;;
@@ -214,7 +230,7 @@ case $cmd in
     ID=$(new_id)
     trap on_signal INT TERM
     trap cleanup EXIT
-    call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" "$help" >/dev/null
+    call start "$ID" "${label:-Desktop testing}" "$countdown" "$max" "$help" "$estimate" >/dev/null
     # typing a postpone time (P) pauses the countdown for up to 60 s
     result=$(wait_result $((countdown + 70 + 125))) || { ipc cancel "$ID" >/dev/null 2>&1; die "no answer from the plugin"; }
     echo "$result"
@@ -339,6 +355,11 @@ case $cmd in
     done
     [[ -n $text ]] || die 'usage: talk-to-me notice "TEXT" [--seconds N]'
     call notice "$text" "$secs" >/dev/null
+    ;;
+
+  eta)
+    [[ $# -ge 1 ]] || die 'usage: talk-to-me eta DUR  (90s, 3m or minutes)'
+    call eta "$(to_seconds "$1")" >/dev/null
     ;;
 
   say)

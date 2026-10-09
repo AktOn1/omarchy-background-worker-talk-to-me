@@ -62,12 +62,31 @@ function remainingText(seconds) {
   return m + ":" + (r < 10 ? "0" : "") + r
 }
 
+// "about 3 min" / "about 45 s" for the countdown card.
+function estimateLabel(seconds) {
+  var s = Math.max(0, Math.round(seconds))
+  if (s <= 0) return ""
+  if (s < 90) return "about " + s + " s"
+  return "about " + Math.round(s / 60) + " min"
+}
+
+// Banner time text: time left against the agent's estimate, "taking longer" past it, or time so far without one.
+function progressText(estimate, elapsed) {
+  var e = Math.max(0, Math.round(elapsed))
+  var est = Math.max(0, Math.round(estimate))
+  if (est <= 0) return remainingText(e) + " so far"
+  if (e <= est) return "about " + remainingText(est - e) + " left"
+  return "taking longer · +" + remainingText(e - est)
+}
+
 function statusJson(st) {
   return JSON.stringify({
     phase: st.phase,
     mode: st.mode,
     label: st.label,
     question: st.question,
-    remainingSec: st.remainingSec
+    remainingSec: st.remainingSec,
+    estimateSec: st.estimateSec || 0,
+    elapsedSec: st.elapsedSec || 0
   })
 }

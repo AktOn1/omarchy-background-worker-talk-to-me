@@ -3,10 +3,63 @@
 # Gemini CLI, OpenCode via its plugin; same JSON in, exit 2 + stderr = blocked). Independent of PATH order,
 # so it also catches absolute paths. Shell tools: blocks commands that touch the live desktop unless a talk-to-me
 # session is active. Question tools: while a session is active, questions must go through talk-to-me ask.
+# Isolated work needs no session: a command aimed at another compositor (nested Hyprland, its own
+# HYPRLAND_INSTANCE_SIGNATURE / WAYLAND_DISPLAY), at a HEADLESS-n virtual monitor, or marked TALK_TO_ME_ISOLATED=1
+# cannot be disturbed by the user's keyboard or mouse and cannot disturb their work.
+#   talk-to-me-guard-hook --shim NAME ARGS...   exit 0 when that call is isolated (used by talk-to-me-guard)
 import json, os, re, subprocess, sys
 
 if os.environ.get("TALK_TO_ME_GUARD_OFF"):
     sys.exit(0)
+
+def live_targets():
+    """(signatures, wayland sockets) of the user's real session: Hyprland instances not started inside another compositor."""
+    sigs, socks = set(), set()
+    base = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid(), "hypr")
+    try:
+        for sig in os.listdir(base):
+            try:
+                lock = open(os.path.join(base, sig, "hyprland.lock")).read().split()
+                env = open("/proc/%s/environ" % lock[0], "rb").read().split(b"\0")
+            except (OSError, IndexError):
+                continue
+            if any(e.startswith(b"WAYLAND_DISPLAY=") for e in env):
+                continue
+            sigs.add(sig)
+            if len(lock) > 1:
+                socks.add(lock[1])
+    except OSError:
+        pass
+    return sigs, socks
+
+def isolated(text, env):
+    """True when the command (or the environment it runs in) targets something other than the live desktop."""
+    if re.search(r"\bTALK_TO_ME_ISOLATED=\S", text) or env.get("TALK_TO_ME_ISOLATED"):
+        return True
+    sigs, socks = live_targets()
+    if not sigs:
+        return False
+    def other(val, live):
+        val = os.path.basename(val.strip("'\""))
+        return val != "" and val not in live
+    for var, live in (("HYPRLAND_INSTANCE_SIGNATURE", sigs), ("WAYLAND_DISPLAY", socks)):
+        found = re.findall(r"\b" + var + r"=(\S+)", text)
+        if found:
+            if all(other(v, live) for v in found):
+                return True
+        elif env.get(var) and other(env[var], live):
+            return True
+    m = re.search(r"(?:^|\s)(?:-i|--instance)\s+['\"]?([0-9a-f_]{20,})", text)
+    if m and m.group(1) not in sigs:
+        return True
+    # a virtual (headless) monitor nobody looks at, as long as the command does not move the user's focus there
+    if re.search(r"HEADLESS-\d", text) and not re.search(r"focus|movetoworkspace|workspace\s", text, re.I):
+        return True
+    return False
+
+if len(sys.argv) > 2 and sys.argv[1] == "--shim":
+    sys.exit(0 if isolated(" ".join(sys.argv[2:]), os.environ) else 1)
+
 SHELL_TOOLS = {"bash", "shell", "local_shell", "run_shell_command", "execute_bash", "exec_command", "unified_exec", "terminal"}
 ASK_TOOLS = {"askuserquestion", "question", "ask_user"}
 try:
@@ -59,6 +112,9 @@ headless = re.search(r'--headless|--help|--version|\s-h(?:\s|$)', cmd)
 if not (touch.search(cmd) or ((win.search(cmd) or (win_extra and win_extra.search(cmd))) and not headless)):
     sys.exit(0)
 
+if isolated(cmd, os.environ):
+    sys.exit(0)
+
 if session_state().get("phase") == "active":
     sys.exit(0)
 
@@ -68,6 +124,8 @@ sys.stderr.write(
     "(5 s countdown + TESTING banner; --help adds a Y key so the user can offer to answer your questions. Drop --help only for hands-off work with no visual questions.)\n"
     "Then repeat the command. After EACH visible change ask on screen, never in this terminal:  talk-to-me ask \"Did X happen?\"  (yes/no/unsure; --text for open questions)\n"
     "Finish with:  talk-to-me end\n"
+    "No session is needed when the work cannot touch the user: headless, a nested compositor (give the command its own HYPRLAND_INSTANCE_SIGNATURE / WAYLAND_DISPLAY),\n"
+    "a HEADLESS-n virtual monitor, or mark the command  TALK_TO_ME_ISOLATED=1 <command>  (only when no window of the user's is touched).\n"
     'If talk-to-me start prints "cancelled" or "postpone:<min>": touch nothing, do other work, retry later.\n'
     "The human can disable this with talk-to-me-install-agent guard-remove or TALK_TO_ME_GUARD_OFF=1.\n")
 sys.exit(2)

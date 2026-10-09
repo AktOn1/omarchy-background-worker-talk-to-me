@@ -23,6 +23,9 @@ esac
 in_agent=0
 [[ -n ${AI_AGENT:-} || -n ${PAPERCLIP_RUN_ID:-} || -n ${CLAUDECODE:-} || -n ${OPENCODE:-} || -n ${GEMINI_CLI:-} || -n ${CODEX_THREAD_ID:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] && in_agent=1
 
+# isolated targets (another compositor, a HEADLESS-n monitor, TALK_TO_ME_ISOLATED=1) need no session
+if (( touches && in_agent )) && "$(dirname "$self")/talk-to-me-guard-hook" --shim "$name" "$@" 2>/dev/null; then touches=0; fi
+
 # once the outer command passed the check, commands it spawns (omarchy-restart-shell calls hyprctl while the shell is down) pass too
 if (( touches && in_agent )) && [[ -z ${TALK_TO_ME_GUARD_OFF:-} && -z ${TALK_TO_ME_GUARD_CHECKED:-} ]]; then
   state=$("$(dirname "$self")/talk-to-me" status 2>/dev/null)
