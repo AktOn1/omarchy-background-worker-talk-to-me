@@ -94,6 +94,7 @@ edit_hook() {
   local file=${1:-$settings} action=$2 event=${3:-PreToolUse} matcher=${4:-$claude_matcher} timeout=${5:-10}
   python3 - "$file" "$root/bin/talk-to-me-guard-hook" "$action" "$event" "$matcher" "$timeout" <<'PY'
 import json, os, shutil, sys
+os.umask(0o077)
 path, hook, action, event, matcher, timeout = sys.argv[1:7]
 data = json.load(open(path)) if os.path.exists(path) else {}
 pre = data.setdefault("hooks", {}).setdefault(event, [])
@@ -101,7 +102,8 @@ mine = lambda e: any("talk-to-me-guard-hook" in h.get("command", "") for h in e.
 had = any(mine(e) for e in pre)
 if action == "add" and not had:
     if os.path.exists(path) and not os.path.exists(path + ".talk-to-me-backup"):
-        shutil.copy(path, path + ".talk-to-me-backup")
+        shutil.copyfile(path, path + ".talk-to-me-backup")
+        shutil.copymode(path, path + ".talk-to-me-backup")
     pre.append({"matcher": matcher, "hooks": [{"type": "command", "command": hook, "timeout": int(timeout)}]})
     print("hook added to " + path)
 elif action == "remove" and had:
@@ -118,7 +120,7 @@ else:
 path = os.path.realpath(path)
 os.makedirs(os.path.dirname(path), exist_ok=True)
 tmp = path + ".talk-to-me.tmp"
-with open(tmp, "w") as f:
+with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
     f.write("\n")
 if os.path.exists(path):

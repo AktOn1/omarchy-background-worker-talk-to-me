@@ -6,6 +6,11 @@
 
 Omarchy shell plugin for working with AI agents. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Y / N / ? or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
 
+## What's new
+- **0.3.2 (2026-10-12):** `talk-to-me start "Restart shell" --work` for non-test desktop work (shell restart, plugin install): the screens say WORKING instead of TESTING. The agent installer now writes your agent settings and their backup with private permissions from the start.
+- **0.3.1 (2026-10-09):** a green DONE checkmark card when the agent finishes a test.
+- **0.3.0 (2026-10-09):** an agent watcher for any agent, a mouse shield while the agent works alone, an estimate shown for the whole test.
+
 ## Why you want this
 AI agents that build or tweak your Omarchy desktop (plugins, Hyprland config, bar, animations, games) cannot see what you see. Screenshot loops are slow and often wrong, and an agent that suddenly opens windows or sends keys while you work spoils its own test: a stray click of yours looks like a failed test. This plugin gives you and the agent a short handshake:
 
