@@ -24,6 +24,7 @@ visual result was not human-confirmed.
    `talk-to-me start "short title" --help "watch the screen and press Y/N after each window move"`; the card
    shows it with a Y key and Y gives `human`. Use `--help` when a human's eyes are faster or more
    reliable than you testing alone. Without it there is no Y key. It prints `human`, `solo`, `cancelled` (Esc: not now, touch nothing, do other work and retry later) or `postpone:<min>` (P, exit code 5: wait that many minutes doing non-visual work, then `talk-to-me start` again).
+   **Not testing?** Restarting the shell, reloading Hyprland, installing a plugin or other desktop work that is not a test: add `--work` (`talk-to-me start "short title" --work --estimate 1m`). The screens then say WORKING instead of TESTING; nothing else changes and you usually have nothing to `ask`.
 2. Make one visible change, then ask at once (never run all the steps and ask at the end): `talk-to-me ask "<question answerable by looking>"`. Ask ONLY through `talk-to-me ask`, never in the terminal/chat or with a built-in question tool such as AskUserQuestion: the human is looking at the desktop, not at your terminal.
    Output is one of `yes` | `no` | `unsure` | `text:<reply>` | `postpone:<min>` | `timeout` | `ended`.
    - `ended`: the human pressed Esc. Stop changing the desktop, restore what you changed, and report.

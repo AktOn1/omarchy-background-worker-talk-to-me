@@ -103,11 +103,16 @@ function badgeRing(estimate, elapsed) {
   return { text: "+" + remainingText(e - est), fraction: 0 }
 }
 
+function cleanKind(raw) {
+  return String(raw) === "work" ? "work" : "test"
+}
+
 function statusJson(st) {
   return JSON.stringify({
     phase: st.phase,
     mode: st.mode,
     label: st.label,
+    kind: st.kind || "test",
     question: st.question,
     remainingSec: st.remainingSec,
     estimateSec: st.estimateSec || 0,

@@ -23,6 +23,7 @@ guessing from screenshots.
    you testing alone, ask for help: `talk-to-me start "short title" --help "watch the screen and
    press Y/N after each window move"`. The card shows that text with a Y key; if they press Y
    you get `human` and `talk-to-me ask` works. Without `--help` there is no Y key and no one to ask. It can also print `cancelled` (Esc: not now; touch nothing, do other work, retry later) or `postpone:<min>` (P, exit code 5: do other non-visual work for `<min>` minutes, then run `talk-to-me start` again). Do not start a second session while one is open.
+   **Not testing?** If you only restart the shell, reload Hyprland, install a plugin or do other work on the desktop that is not a test, add `--work`: `talk-to-me start "short title" --work --estimate 1m`. The screens then say WORKING instead of TESTING; everything else is the same, and you usually have nothing to `ask`.
 2. Ask right after each visible change, before the next one (do not run all the steps and ask at the end). Ask ONLY through `talk-to-me ask`, never in the terminal/chat or with a built-in question tool such as AskUserQuestion: the human is looking at the desktop, not at your terminal. One question that can be answered by looking:
    `talk-to-me ask "Did the window move from left to right?"`. It prints exactly one of
    `yes`, `no`, `unsure`, `text:<reply>`, `postpone:<min>`, `timeout` or `ended` and exits. Act on it:

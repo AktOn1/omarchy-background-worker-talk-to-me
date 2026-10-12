@@ -37,6 +37,9 @@ Scope {
   // human | solo (only meaningful while active)
   property string mode: ""
   property string label: ""
+  // test | work: "work" = the agent restarts the shell or similar, not testing; the screens say WORKING instead of TESTING
+  property string kind: "test"
+  readonly property bool working: kind === "work"
   // what the agent asks the person to help with; empty = no help wanted, so the countdown has no Y key
   property string helpText: ""
   property string startId: ""
@@ -145,14 +148,15 @@ Scope {
     doneHideTimer.restart()
   }
 
-  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp, rawEstimate, rawShield) {
+  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp, rawEstimate, rawShield, rawKind) {
     const cid = Model.cleanId(id)
     if (!cid) return "error:bad id"
     if (root.runtimeBase === "") return "error:no XDG_RUNTIME_DIR"
     if (root.phase !== "idle") root.endSession("cancelled", "ended")
     else if (root.askId !== "") root.answer("superseded")
     root.doneShow = false
-    root.label = Model.cleanText(rawLabel, 60) || "Desktop testing"
+    root.kind = Model.cleanKind(rawKind)
+    root.label = Model.cleanText(rawLabel, 60) || (root.working ? "Desktop work" : "Desktop testing")
     root.helpText = Model.cleanText(rawHelp, 160)
     root.startId = cid
     root.countdownTotal = Model.clampInt(rawCountdown, 1, 30, Model.DEFAULTS.countdown)
@@ -191,6 +195,7 @@ Scope {
     root.sayText = ""
     root.mode = ""
     root.label = ""
+    root.kind = "test"
     root.helpText = ""
     root.sessionLeft = 0
     root.estimateSec = 0
@@ -281,8 +286,10 @@ Scope {
   function postpone(result) {
     const minutes = parseInt(result.slice(9), 10)
     const lbl = root.label
+    const knd = root.kind
     root.endSession(result, result)
     root.label = lbl
+    root.kind = knd
     root.pausedEnd = Date.now() + minutes * 60 * 1000
     root.pausedLeft = minutes * 60
     root.pausedTotal = minutes * 60
@@ -339,6 +346,7 @@ Scope {
       phase: root.phase,
       mode: root.mode,
       label: root.label,
+      kind: root.kind,
       question: root.question,
       remainingSec: root.phase === "paused" ? root.pausedLeft : root.sessionLeft,
       estimateSec: root.estimateSec,
@@ -501,7 +509,7 @@ Scope {
 
   IpcHandler {
     target: "talk-to-me"
-    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string, estimate: string, shield: string): string { return root.startSession(id, label, countdown, maxMinutes, help, estimate, shield) }
+    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string, estimate: string, shield: string, kind: string): string { return root.startSession(id, label, countdown, maxMinutes, help, estimate, shield, kind) }
     function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
     function quick(id: string, question: string, timeout: string, kind: string): string { return root.quickQuestion(id, question, timeout, kind) }
     function say(text: string): string { return root.say(text) }
@@ -609,7 +617,7 @@ Scope {
               font.family: Style.font.family
               font.pixelSize: Style.font.body
               font.bold: true
-              text: root.phase === "idle" ? "AGENT ACTIVITY: hands off" : root.phase === "paused" ? "Testing paused" : root.mode === "human" ? "TESTING · you are helping" : "TESTING · hands off"
+              text: root.phase === "idle" ? "AGENT ACTIVITY: hands off" : root.phase === "paused" ? (root.working ? "Work paused" : "Testing paused") : root.mode === "human" ? (root.working ? "WORKING · you are helping" : "TESTING · you are helping") : (root.working ? "WORKING · hands off" : "TESTING · hands off")
             }
             Text {
               width: Math.min(implicitWidth, Style.space(340))
@@ -925,12 +933,12 @@ Scope {
           if (root.typing) {
             return root.standalone
               ? [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Esc", text: root.typeOnly ? "dismiss" : "back", action: "esc" } ]
-              : [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? "stop test" : "back", action: "esc" } ]
+              : [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? (root.working ? "stop work" : "stop test") : "back", action: "esc" } ]
           }
           const answers = [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "unsure", action: "unsure" }, { key: "T", text: "type", action: "type" } ]
           return root.standalone
             ? [ ctrl ].concat(answers, [ { key: "Esc", text: "dismiss", action: "end" } ])
-            : [ ctrl ].concat(answers, [ { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "stop test", action: "end" } ])
+            : [ ctrl ].concat(answers, [ { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.working ? "stop work" : "stop test", action: "end" } ])
         }
 
         MouseArea {
@@ -986,7 +994,7 @@ Scope {
                 text: root.inputGuarded
                   ? "KEYS AND CLICKS IGNORED FOR A MOMENT · KEEP TYPING, NOTHING TRIGGERS"
                   : prompt.bar
-                  ? (root.held ? "PAUSED: NOTHING STARTS · YOUR KEYBOARD AND MOUSE ARE FREE" : "HEADS UP: AN AGENT STARTS TESTING IN " + root.countdownLeft + " s")
+                  ? (root.held ? "PAUSED: NOTHING STARTS · YOUR KEYBOARD AND MOUSE ARE FREE" : "HEADS UP: AN AGENT STARTS " + (root.working ? "WORKING ON YOUR DESKTOP" : "TESTING") + " IN " + root.countdownLeft + " s")
                   : (root.standalone ? "AGENT ASKS" : "AGENT ASKS · " + root.askLeft + " s")
               }
               Text {
