@@ -1,6 +1,6 @@
 #!/bin/bash
 # talk-to-me-guard: installed as wtype / omarchy-restart-shell / hyprctl in ~/.local/bin.
-# Inside an agent run (AI_AGENT, CLAUDECODE, OPENCODE, GEMINI_CLI, CODEX_THREAD_ID, PAPERCLIP_RUN_ID, or any agent via TALK_TO_ME_GUARD=1)
+# Inside an agent run (AI_AGENT, CLAUDECODE, OPENCODE, GEMINI_CLI, CODEX_THREAD_ID, or any other agent via TALK_TO_ME_GUARD=1 or the agent-env file)
 # it refuses desktop-touching calls unless a talk-to-me session is active, so agents cannot move windows or
 # send keys without the TESTING banner. Elsewhere it is a pass-through. TALK_TO_ME_GUARD_OFF=1 bypasses it.
 name=$(basename "$0")
@@ -20,8 +20,17 @@ case $name in
   hyprctl) [[ " $* " =~ \ (dispatch|reload|keyword)\  || " $* " == *"dispatch "* ]] && touches=1 ;;
 esac
 
+# extra_agent_env: true when an env variable named in ~/.config/background-worker-talk-to-me/agent-env (one name per line) is set
+extra_agent_env() {
+  local f="${XDG_CONFIG_HOME:-$HOME/.config}/background-worker-talk-to-me/agent-env" n
+  [[ -f $f ]] || return 1
+  while read -r n _; do n=${n%%#*}; [[ $n =~ ^[A-Za-z_][A-Za-z0-9_]*$ && -n ${!n:-} ]] && return 0; done < "$f"
+  return 1
+}
+
 in_agent=0
-[[ -n ${AI_AGENT:-} || -n ${PAPERCLIP_RUN_ID:-} || -n ${CLAUDECODE:-} || -n ${OPENCODE:-} || -n ${GEMINI_CLI:-} || -n ${CODEX_THREAD_ID:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] && in_agent=1
+[[ -n ${AI_AGENT:-} || -n ${CLAUDECODE:-} || -n ${OPENCODE:-} || -n ${GEMINI_CLI:-} || -n ${CODEX_THREAD_ID:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] && in_agent=1
+(( in_agent )) || { extra_agent_env && in_agent=1; }
 
 # isolated targets (another compositor, a HEADLESS-n monitor, TALK_TO_ME_ISOLATED=1) need no session
 if (( touches && in_agent )) && "$(dirname "$self")/talk-to-me-guard-hook" --shim "$name" "$@" 2>/dev/null; then touches=0; fi

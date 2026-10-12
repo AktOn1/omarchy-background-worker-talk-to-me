@@ -75,7 +75,7 @@ talk-to-me: Background Worker Talk To Me
       ended it only to clean up, so no success is shown.
   talk-to-me status          Print the session state as JSON.
   talk-to-me require [WHAT]  For launcher scripts that open a window (a game, an app): exits 0 when it is fine
-      to go on, 99 (with a message) when an agent run (AI_AGENT, CLAUDECODE, OPENCODE, GEMINI_CLI, CODEX_THREAD_ID, PAPERCLIP_RUN_ID or TALK_TO_ME_GUARD=1)
+      to go on, 99 (with a message) when an agent run (AI_AGENT, CLAUDECODE, OPENCODE, GEMINI_CLI, CODEX_THREAD_ID, or TALK_TO_ME_GUARD=1 or the agent-env file)
       has no active session. Always 0 for a person at a terminal or with TALK_TO_ME_GUARD_OFF=1.
 
 Environment: TALK_TO_ME_QS_PATH=<dir> talks to a scratch Quickshell config instead of omarchy-shell.
@@ -97,6 +97,14 @@ ipc() {
 die() { echo "talk-to-me: $1" >&2; exit 1; }
 
 # Calls the plugin; fails with a clear message when the shell or plugin is not there.
+# extra_agent_env: true when an env variable named in ~/.config/background-worker-talk-to-me/agent-env (one name per line) is set
+extra_agent_env() {
+  local f="${XDG_CONFIG_HOME:-$HOME/.config}/background-worker-talk-to-me/agent-env" n
+  [[ -f $f ]] || return 1
+  while read -r n _; do n=${n%%#*}; [[ $n =~ ^[A-Za-z_][A-Za-z0-9_]*$ && -n ${!n:-} ]] && return 0; done < "$f"
+  return 1
+}
+
 call() {
   local out
   out=$(ipc "$@") || die "${out:-omarchy-shell is not running}"
@@ -394,7 +402,7 @@ case $cmd in
     ;;
 
   require)
-    [[ -n ${AI_AGENT:-} || -n ${PAPERCLIP_RUN_ID:-} || -n ${CLAUDECODE:-} || -n ${OPENCODE:-} || -n ${GEMINI_CLI:-} || -n ${CODEX_THREAD_ID:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] || exit 0
+    [[ -n ${AI_AGENT:-} || -n ${CLAUDECODE:-} || -n ${OPENCODE:-} || -n ${GEMINI_CLI:-} || -n ${CODEX_THREAD_ID:-} || ${TALK_TO_ME_GUARD:-} == 1 ]] || extra_agent_env || exit 0
     [[ -z ${TALK_TO_ME_GUARD_OFF:-} ]] || exit 0
     state=$("$0" status 2>/dev/null) || exit 0
     [[ $state == *'"phase":"active"'* ]] && exit 0

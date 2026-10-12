@@ -25,8 +25,9 @@ Usage: talk-to-me-install-agent <command> [args]
   all FILE           skill + block FILE + guard (Claude Code only)
   status             show what is installed
 The plugin also runs a watcher that needs no setup: it shows an "AGENT ACTIVITY" banner when a window opens from
-any agent run (Claude, Codex, Gemini, OpenCode, pi, ...). Agent runs for the shims are detected by AI_AGENT, CLAUDECODE or
-PAPERCLIP_RUN_ID; for other agents export TALK_TO_ME_GUARD=1.
+any agent run (Claude, Codex, Gemini, OpenCode, pi, ...). Agent runs for the shims are detected by AI_AGENT, CLAUDECODE,
+OPENCODE, GEMINI_CLI or CODEX_THREAD_ID; for other agents export TALK_TO_ME_GUARD=1, or list the variable
+name your agent sets in ~/.config/background-worker-talk-to-me/agent-env (one per line).
 U
 }
 

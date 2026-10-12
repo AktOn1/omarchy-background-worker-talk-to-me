@@ -21,8 +21,15 @@ AGENTS = {
 # environment variables an agent leaves in every command it runs (AI_AGENT is the cross-vendor convention)
 ENV_MARKERS = (
     "AI_AGENT", "CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "OPENCODE", "OPENCODE_PID", "CODEX_SANDBOX", "CODEX_THREAD_ID",
-    "GEMINI_CLI", "GOOSE_TERMINAL", "CURSOR_AGENT", "PAPERCLIP_RUN_ID", "TALK_TO_ME_GUARD",
+    "GEMINI_CLI", "GOOSE_TERMINAL", "CURSOR_AGENT", "TALK_TO_ME_GUARD",
 )
+
+
+def extra_env_markers():
+    try:
+        return {l.split("#")[0].strip() for l in open(os.path.join(CONF_DIR, "agent-env")) if l.split("#")[0].strip()}
+    except OSError:
+        return set()
 
 
 def extra_agents():
@@ -61,9 +68,10 @@ def ppid(pid):
 def agent_of(pid, names):
     """Name of the agent a process belongs to, or ''."""
     env = read("/proc/%d/environ" % pid).split(b"\0")
+    extra = extra_env_markers()
     for item in env:
         key = item.split(b"=", 1)[0].decode(errors="replace")
-        if key in ENV_MARKERS and item.split(b"=", 1)[1:] not in ([b""], [b"0"], []):
+        if (key in ENV_MARKERS or key in extra) and item.split(b"=", 1)[1:] not in ([b""], [b"0"], []):
             return key.lower()
     seen = 0
     while pid > 1 and seen < 40:
