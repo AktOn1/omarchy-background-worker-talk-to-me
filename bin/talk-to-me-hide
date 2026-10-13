@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+# talk-to-me-hide: clears every screen while an agent works, so none of the person's windows are in the way
+# (or stuck on screen). The plugin runs it when a session starts working and when it ends.
+#   talk-to-me-hide hide      switch each monitor to its own empty workspace and remember what was shown
+#   talk-to-me-hide restore   switch every monitor back (also safe to run when nothing is hidden)
+# No window is moved, closed or resized, so tiling layouts survive. Windows that open while hidden land on the
+# empty workspace and move to the person's workspace when it ends. Pinned windows (shown on every workspace) are unpinned meanwhile and pinned again after.
+# State: $XDG_RUNTIME_DIR/talk-to-me/hidden.json.
+import json, os, subprocess, sys
+
+RUNTIME = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid(), "talk-to-me")
+STATE = os.path.join(RUNTIME, "hidden.json")
+EMPTY = "name:talk-to-me-hidden-"
+
+
+def hypr(*args):
+    r = subprocess.run(["hyprctl", *args], capture_output=True, text=True, timeout=5)
+    return r.stdout
+
+
+def jget(what):
+    try:
+        return json.loads(hypr("-j", what))
+    except (ValueError, subprocess.SubprocessError, OSError):
+        return None
+
+
+def run_lua(lines):
+    if lines:
+        hypr("eval", "\n".join(lines))
+
+
+def lua(s):
+    return json.dumps(s)
+
+
+def focus(**kw):
+    return "hl.dispatch(hl.dsp.focus({ %s }))" % ", ".join("%s = %s" % (k, lua(v)) for k, v in kw.items())
+
+
+def pin(address):
+    return "hl.dispatch(hl.dsp.window.pin({ window = %s, action = \"toggle\" }))" % lua("address:" + address)
+
+
+def move(address, ws):
+    return "hl.dispatch(hl.dsp.window.move({ window = %s, workspace = %s, follow = false }))" % (lua("address:" + address), lua(ws))
+
+
+def toggle_special(name):
+    return "hl.dispatch(hl.dsp.workspace.toggle_special(%s))" % lua(name)
+
+
+def ws_target(ws):
+    return str(ws["id"]) if ws["id"] > 0 else "name:" + ws["name"]
+
+
+def hide():
+    if os.path.exists(STATE):
+        restore()
+    monitors = jget("monitors")
+    clients = jget("clients")
+    if not monitors or clients is None:
+        return 1
+    focused = next((m for m in monitors if m.get("focused")), monitors[0])
+    active = (jget("activewindow") or {}).get("address", "")
+    cursor = jget("cursorpos") or {}
+    pinned = [c["address"] for c in clients if c.get("pinned") and c.get("mapped", True)]
+    state = {
+        "monitors": [{"name": m["name"], "ws": ws_target(m["activeWorkspace"]),
+                      "special": (m.get("specialWorkspace") or {}).get("name", "")[len("special:"):]
+                      if (m.get("specialWorkspace") or {}).get("name", "").startswith("special:") else ""}
+                     for m in monitors],
+        "focused": focused["name"], "active": active, "pinned": pinned,
+        "cursor": [cursor.get("x"), cursor.get("y")],
+    }
+    os.makedirs(RUNTIME, mode=0o700, exist_ok=True)
+    tmp = STATE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(state, f)
+    os.replace(tmp, STATE)
+    cmds = [pin(a) for a in pinned]
+    for i, m in enumerate(state["monitors"]):
+        if m["special"]:
+            cmds.append(toggle_special(m["special"]))
+        cmds.append(focus(monitor=m["name"]))
+        cmds.append(focus(workspace=EMPTY + str(i + 1)))
+    cmds.append(focus(monitor=focused["name"]))
+    run_lua(cmds)
+    return 0
+
+
+def restore():
+    try:
+        with open(STATE) as f:
+            state = json.load(f)
+    except (OSError, ValueError):
+        return 0
+    cmds = []
+    # windows the agent opened meanwhile come along to where the person was, instead of staying out of sight
+    home = {EMPTY[len("name:"):] + str(i + 1): m["ws"] for i, m in enumerate(state["monitors"])}
+    for c in jget("clients") or []:
+        if c["workspace"]["name"] in home:
+            cmds.append(move(c["address"], home[c["workspace"]["name"]]))
+    for m in state["monitors"]:
+        cmds.append(focus(monitor=m["name"]))
+        cmds.append(focus(workspace=m["ws"]))
+        if m["special"]:
+            cmds.append(toggle_special(m["special"]))
+    cmds.append(focus(monitor=state["focused"]))
+    cmds.extend(pin(a) for a in state.get("pinned", []))
+    if state.get("active"):
+        cmds.append(focus(window="address:" + state["active"]))
+    x, y = state.get("cursor", [None, None])
+    if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+        cmds.append("hl.dispatch(hl.dsp.cursor.move({ x = %d, y = %d }))" % (x, y))
+    run_lua(cmds)
+    try:
+        os.remove(STATE)
+    except OSError:
+        pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit({"hide": hide, "restore": restore}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: 2)())

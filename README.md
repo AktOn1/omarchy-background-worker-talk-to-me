@@ -7,6 +7,8 @@
 Omarchy shell plugin for working with AI agents. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Y / N / ? or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
 
 ## What's new
+- **0.3.4 (2026-10-13):** a postponed test stays postponed. If an agent runs `talk-to-me start` again before your pause is over (a retry, or a second agent), it now gets `postpone:<minutes left>` at once instead of starting a new countdown.
+- **0.3.3 (2026-10-13):** while the agent works, every screen switches to an empty workspace, so none of your windows are in the way or stuck on screen. Nothing is moved or closed; everything comes back when the session ends. Switch it off with `talk-to-me settings set hide off`, or per test with `--no-hide`.
 - **0.3.2 (2026-10-12):** `talk-to-me start "Restart shell" --work` for non-test desktop work (shell restart, plugin install): the screens say WORKING instead of TESTING. The agent installer now writes your agent settings and their backup with private permissions from the start.
 - **0.3.1 (2026-10-09):** a green DONE checkmark card when the agent finishes a test.
 - **0.3.0 (2026-10-09):** an agent watcher for any agent, a mouse shield while the agent works alone, an estimate shown for the whole test.
@@ -71,13 +73,15 @@ The hook (layer 2) reads the command the agent is about to run and refuses it, w
 4. **Experimental: a question without a test.** `talk-to-me question "Which one, A or B?"` shows a plain question card (Y / N / ? / T, Esc dismisses) with no TESTING banner and no countdown, so an agent that is stuck on a decision can ask you while you work in another app. It is **off** until you run `talk-to-me settings set questions on`. Agents are told to use it only when blocked and a wrong guess is costly; `question-gap` (default 60 s) refuses a second question too soon. Esc prints `dismissed`; P (postpone) does not exist here.
 5. **Stop.** `talk-to-me end` removes the banner and plays a short **DONE** animation on every screen: a green checkmark draws itself in the top-right corner for about 3 seconds (it takes no clicks or keys), so you see the work is finished and the desktop is yours again. `talk-to-me end --quiet` (or `--failed`) skips the animation, for failed runs and cleanup traps; it only plays after a test that was actually running. Safety nets: Esc on a question ends the session (Esc in the textbox opened with T only goes back; with `--text` it ends the session) (`ask` prints `ended`), the session has a hard time limit (default 20 min), a killed `talk-to-me ask` withdraws its question.
 
+**Clean desktop.** When the test or work starts, each screen switches to its own empty workspace (`talk-to-me-hide`): your windows are not closed, moved or resized, just out of sight, so tiling layouts survive. Windows the agent opens land there; at the end every screen goes back to where it was (same workspace, focused window, mouse position, pinned windows pinned again) and windows the agent left open come along to your workspace instead of staying hidden. It also restores on a postponed or cancelled session, the time limit, and when the shell restarts (so a shell restart never leaves you on an empty screen). Turn it off with `talk-to-me settings set hide off`; an agent whose test needs your existing windows (it moves or reads an app you already have open) passes `--no-hide`.
+
 **Mouse shield (solo tests).** When nobody pressed Y, the agent works alone, so stray clicks would spoil the test. An invisible, fully transparent layer then covers every screen and swallows mouse clicks and scrolling (screenshots stay clean; the banner says "solo · mouse blocked"). The banner area stays clickable, so one click on it ends the test. When you are helping (Y), the shield is off and you can click and use hotkeys anywhere. The keyboard is not blocked, because the agent's own key presses (`wtype`) go to the focused window. Turn it off with `talk-to-me settings set shield off`; an agent that drives the mouse itself (`ydotool`) passes `--no-shield`.
 
 The keyboard is grabbed only during the short start countdown (it needs it to hear P, Esc, Ctrl and Y when help was asked for). Question cards never take your keyboard or your focus: you keep clicking and typing in your own windows, and answer when you are ready by clicking a button, or by clicking the card once and then pressing Y / N / ? / T / P / Esc (click the textbox to type a reply).
 
 ## Commands
 ```
-talk-to-me start [TITLE] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN] [--no-shield]   -> human | solo | cancelled | postpone:<min>   (default 10 s, 20 min)
+talk-to-me start [TITLE] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN] [--no-shield] [--no-hide]   -> human | solo | cancelled | postpone:<min>   (default 10 s, 20 min)
 talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended  (default 60 s, 120 s with --text)
 talk-to-me question "QUESTION" [--text] [--timeout SEC]   EXPERIMENTAL, off by default -> yes | no | unsure | text:<typed> | dismissed | timeout | busy | disabled | toosoon  (default 120 s)
 talk-to-me settings [get KEY | set KEY VALUE | reset [KEY]]   list or change settings
@@ -99,6 +103,7 @@ Stored in `~/.config/background-worker-talk-to-me/settings.conf` (plain `key=val
 | `questions` | `on` / `off` | `off` | allow `talk-to-me question` (experimental) |
 | `watch` | `on` / `off` | `on` | agent watcher: banner when any agent opens a window with no session |
 | `shield` | `on` / `off` | `on` | invisible mouse shield over every screen during solo tests |
+| `hide` | `on` / `off` | `on` | switch every screen to an empty workspace while the agent works |
 | `notice-seconds` | 3-120 s | 12 | how long that banner stays |
 | `question-timeout` | 3-600 s | 120 | how long a question card stays |
 | `question-gap` | 0-3600 s | 60 | minimum time between two questions |

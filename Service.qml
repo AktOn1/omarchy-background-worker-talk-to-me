@@ -6,7 +6,7 @@
 // never takes the keyboard.
 //
 // IPC (target "talk-to-me"; the `talk-to-me` command wraps these and polls the result files):
-//   start <id> <label> <countdownSec> <maxMinutes> <help> <estimateSec> <shield>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
+//   start <id> <label> <countdownSec> <maxMinutes> <help> <estimateSec> <shield> <kind> <hide>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
 //   ask <id> <question> <timeoutSec> <choice|text>   result file: yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 //   quick <id> <question> <timeoutSec> <choice|text>  (experimental) like ask, but also works with no session: a plain
 //                                                question card, no banner. result file adds: busy | dismissed
@@ -66,6 +66,9 @@ Scope {
   property int estimateSec: 0
   // solo tests put an invisible mouse shield over every screen (the person is not helping, so stray clicks would spoil the test)
   property bool shieldOn: true
+  // while the agent works every screen is switched to an empty workspace (bin/talk-to-me-hide) and switched back at the end
+  property bool hideOn: true
+  property bool desktopCleared: false
   property real bannerW: 0
   property real bannerH: 0
   property double activeStart: 0
@@ -148,10 +151,15 @@ Scope {
     doneHideTimer.restart()
   }
 
-  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp, rawEstimate, rawShield, rawKind) {
+  function startSession(id, rawLabel, rawCountdown, rawMax, rawHelp, rawEstimate, rawShield, rawKind, rawHide) {
     const cid = Model.cleanId(id)
     if (!cid) return "error:bad id"
     if (root.runtimeBase === "") return "error:no XDG_RUNTIME_DIR"
+    if (root.phase === "paused") {
+      // the person postponed: a start before the pause is over (a retry, another agent) must not override it
+      root.writeResult(cid, "postpone:" + Math.max(1, Math.ceil((root.pausedEnd - Date.now()) / 60000)))
+      return "ok"
+    }
     if (root.phase !== "idle") root.endSession("cancelled", "ended")
     else if (root.askId !== "") root.answer("superseded")
     root.doneShow = false
@@ -166,6 +174,7 @@ Scope {
     root.estimateSec = Model.clampInt(rawEstimate, 0, maxMin * 60, 0)
     root.elapsedSec = 0
     root.shieldOn = String(rawShield) !== "0"
+    root.hideOn = String(rawHide) !== "0"
     root.mode = ""
     root.phase = "countdown"
     ticker.restart()
@@ -424,7 +433,10 @@ Scope {
     if (root.askId !== "") { root.armGuard(); root.resetPrompt() }
   }
   onHeldChanged: if (!root.held && root.promptOpen) root.armGuard()
-  onPhaseChanged: if (root.phase === "active" || root.phase === "paused") root.armGuard()
+  onPhaseChanged: {
+    if (root.phase === "active" || root.phase === "paused") root.armGuard()
+    root.syncHidden()
+  }
   onPromptOpenChanged: {
     root.held = false
     if (root.promptOpen) {
@@ -490,6 +502,29 @@ Scope {
 
   RegularExpressionValidator { id: minutesValidator; regularExpression: /[0-9]{0,4}/ }
 
+  // Hides the person's windows (empty workspace per screen) for as long as a session is working; always switches back.
+  readonly property string hideScript: decodeURIComponent(Qt.resolvedUrl("bin/talk-to-me-hide").toString().replace(/^file:\/\//, ""))
+  property string hideWanted: ""
+  function launchHide() {
+    hider.doing = root.hideWanted
+    hider.running = true
+  }
+  function syncHidden() {
+    const want = root.phase === "active" && root.hideOn
+    if (want === root.desktopCleared) return
+    root.desktopCleared = want
+    root.hideWanted = want ? "hide" : "restore"
+    if (!hider.running) root.launchHide()
+  }
+  Process {
+    id: hider
+    property string doing: "restore"
+    command: [root.hideScript, hider.doing]
+    onExited: if (root.hideWanted !== hider.doing) root.launchHide()
+  }
+  // a shell restart or crash during a session must not leave the desktop cleared
+  Component.onCompleted: { root.hideWanted = "restore"; root.launchHide() }
+
   // Agent watcher: tells the user when any agent (Claude, Codex, OpenCode, Gemini, ...) opens a window with no session.
   readonly property string watchScript: decodeURIComponent(Qt.resolvedUrl("bin/talk-to-me-watch").toString().replace(/^file:\/\//, ""))
   Process {
@@ -509,7 +544,7 @@ Scope {
 
   IpcHandler {
     target: "talk-to-me"
-    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string, estimate: string, shield: string, kind: string): string { return root.startSession(id, label, countdown, maxMinutes, help, estimate, shield, kind) }
+    function start(id: string, label: string, countdown: string, maxMinutes: string, help: string, estimate: string, shield: string, kind: string, hide: string): string { return root.startSession(id, label, countdown, maxMinutes, help, estimate, shield, kind, hide) }
     function ask(id: string, question: string, timeout: string, kind: string): string { return root.askQuestion(id, question, timeout, kind) }
     function quick(id: string, question: string, timeout: string, kind: string): string { return root.quickQuestion(id, question, timeout, kind) }
     function say(text: string): string { return root.say(text) }
