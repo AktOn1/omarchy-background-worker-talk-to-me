@@ -26,19 +26,21 @@ function cleanText(value, max) {
   return s.length > max ? s.slice(0, max - 1) + "…" : s
 }
 
-// Maps a key press to an action for the current phase.
+// Maps a Ctrl+key press to an action for the current phase. name is the lowercase key name
+// ("y", "/", "enter", "q"); a press without Ctrl never triggers anything.
 //   countdown -> "human" | "start" | "postpone" | "end" | ""
 //   ask       -> "yes" | "no" | "unsure" | "type" | "postpone" | "end" | ""
-function keyAction(phase, text, isEscape) {
-  if (isEscape) return "end"
-  var t = String(text || "").toLowerCase()
-  if (phase === "countdown") return t === "y" ? "human" : t === "s" || t === "\n" ? "start" : t === "p" ? "postpone" : ""
+function keyAction(phase, name, ctrl) {
+  if (!ctrl) return ""
+  var k = String(name || "").toLowerCase()
+  if (k === "q") return "end"
+  if (phase === "countdown") return k === "y" ? "human" : k === "enter" ? "start" : k === "p" ? "postpone" : ""
   if (phase === "ask") {
-    if (t === "y") return "yes"
-    if (t === "n") return "no"
-    if (t === "?" || t === "/" || t === "u") return "unsure"
-    if (t === "t") return "type"
-    if (t === "p") return "postpone"
+    if (k === "y") return "yes"
+    if (k === "n") return "no"
+    if (k === "/" || k === "u") return "unsure"
+    if (k === "t") return "type"
+    if (k === "p") return "postpone"
   }
   return ""
 }

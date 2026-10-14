@@ -11,9 +11,11 @@ description: >
 # Background Worker Talk To Me
 
 Background Worker Talk To Me (plugin `io.github.akton1.background-worker-talk-to-me`) shows a TESTING banner on the
-desktop and lets you ask the human a yes/no question that they answer with Y / N / ? , or a free-text question they answer in a textbox.
+desktop and lets you ask the human a yes/no question that they answer with Ctrl+Y / Ctrl+N / Ctrl+/ , or a free-text question they answer in a textbox.
 
 ## Check first
+Before anything else, check whether the test can run in a virtual machine (or a nested compositor) instead of on the human's real desktop. If it does not need their real logins, GPU or monitors, run it there: no session, no banner, no risk. Only start a session for what truly needs the real desktop.
+
 `command -v talk-to-me` . If missing, do the task without it and state in your report that the
 visual result was not human-confirmed.
 
@@ -21,15 +23,15 @@ visual result was not human-confirmed.
 1. `talk-to-me start "short title" --estimate 3m` before the first visible change (always give an honest `--estimate`: `90s`, `3m` or minutes; the card shows it, the banner counts it down and says "taking longer" when you overrun; revise with `talk-to-me eta 2m`) (10 s countdown, a heads-up only: the
    human postpones or cancels it if they are at the desk, otherwise it runs out and you continue
    alone in solo mode, where `talk-to-me ask` prints `timeout` at once). To get answers, ask for help:
-   `talk-to-me start "short title" --help "watch the screen and press Y/N after each window move"`; the card
-   shows it with a Y key and Y gives `human`. Use `--help` when a human's eyes are faster or more
-   reliable than you testing alone. Without it there is no Y key. It prints `human`, `solo`, `cancelled` (Esc: not now, touch nothing, do other work and retry later) or `postpone:<min>` (P, exit code 5: wait that many minutes doing non-visual work, then `talk-to-me start` again).
+   `talk-to-me start "short title" --help "watch the screen and answer Ctrl+Y / Ctrl+N after each window move"`; the card
+   shows it with a Ctrl+Y key and Ctrl+Y gives `human`. Use `--help` when a human's eyes are faster or more
+   reliable than you testing alone. Without it there is no Ctrl+Y key. It prints `human`, `solo`, `cancelled` (Ctrl+Q: not now, touch nothing, do other work and retry later) or `postpone:<min>` (Ctrl+P, exit code 5: wait that many minutes doing non-visual work, then `talk-to-me start` again).
    **Not testing?** Restarting the shell, reloading Hyprland, installing a plugin or other desktop work that is not a test: add `--work` (`talk-to-me start "short title" --work --estimate 1m`). The screens then say WORKING instead of TESTING; nothing else changes and you usually have nothing to `ask`.
 2. Make one visible change, then ask at once (never run all the steps and ask at the end): `talk-to-me ask "<question answerable by looking>"`. Ask ONLY through `talk-to-me ask`, never in the terminal/chat or with a built-in question tool such as AskUserQuestion: the human is looking at the desktop, not at your terminal.
    Output is one of `yes` | `no` | `unsure` | `text:<reply>` | `postpone:<min>` | `timeout` | `ended`.
-   - `ended`: the human pressed Esc. Stop changing the desktop, restore what you changed, and report.
+   - `ended`: the human pressed Ctrl+Q. Stop changing the desktop, restore what you changed, and report.
    - `yes`: next step.
-   - `text:<reply>`: the human pressed T and typed a reply. Treat it as their comment or answer and act on it.
+   - `text:<reply>`: the human pressed Ctrl+T and typed a reply. Treat it as their comment or answer and act on it.
    - `postpone:<min>` (exit code 5, also from `talk-to-me start`): the human pressed P and wants to test later. The session is already closed. Stop touching the desktop, restore what you changed, do other non-visual work or wait `<min>` minutes, then `talk-to-me start` again and resume at the same step.
    - `no`: adjust and ask again, at most 3 tries, then stop and report.
    - `unsure` / `timeout`: not a success. Verify another way (screenshot, `hyprctl`) or report it as unconfirmed.

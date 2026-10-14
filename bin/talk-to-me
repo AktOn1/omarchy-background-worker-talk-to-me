@@ -17,41 +17,41 @@ talk-to-me: Background Worker Talk To Me
 
   talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--work] [--countdown SEC] [--max MIN] [--no-shield] [--no-hide]
       Countdown banner (default 10 s). It is a heads-up, not a question: the person who is at the
-      desk postpones (P) or cancels (Esc), otherwise it runs out and you continue alone ("solo";
-      "talk-to-me ask" then prints "timeout" at once). No Y key unless you pass --help.
+      desk postpones (Ctrl+P) or cancels (Ctrl+Q), otherwise it runs out and you continue alone ("solo";
+      "talk-to-me ask" then prints "timeout" at once). No Ctrl+Y key unless you pass --help.
       --help "what I need": say what the person could do that is faster than you testing alone
-      ("watch the screen and press Y/N after each window move"). The card then shows it with
-      a Y key. Prints "human" when they pressed Y (now "talk-to-me ask" works), "solo" when nobody did,
-      "cancelled" when they pressed Esc (not now: stop, touch nothing).
+      ("watch the screen and answer Ctrl+Y / Ctrl+N after each window move"). The card then shows it with
+      a Ctrl+Y key. Prints "human" when they pressed Ctrl+Y (now "talk-to-me ask" works), "solo" when nobody did,
+      "cancelled" when they pressed Ctrl+Q (not now: stop, touch nothing).
       --estimate DUR: how long you expect to need ("90s", "3m", or a bare number = minutes). The countdown card
       shows "Expected duration" and the banner counts "about 2:10 left", then "taking longer". Always give one:
       the person decides from it whether to postpone. Without it the banner only shows the time so far.
-      Solo runs (nobody pressed Y) put an invisible MOUSE SHIELD over every screen so stray clicks cannot spoil
+      Solo runs (nobody pressed Ctrl+Y) put an invisible MOUSE SHIELD over every screen so stray clicks cannot spoil
       the test; the banner stays clickable and ends the test. The keyboard is not blocked (your own wtype keys
-      reach the focused window). When the person helps (Y), no shield. --no-shield: skip it, e.g. when you drive
+      reach the focused window). When the person helps (Ctrl+Y), no shield. --no-shield: skip it, e.g. when you drive
       the mouse yourself (ydotool).
       --work: you are NOT testing, you do something else that touches the desktop (restart the shell, reload
       Hyprland, install or change a plugin). The screens then say "WORKING" instead of "TESTING". Everything else
       (countdown, shield, postpone, estimate, checkmark at the end) is the same; use "talk-to-me ask" only for tests.
       While you work, every screen shows an EMPTY workspace: the person's windows are not closed or moved, just
-      out of sight, and come back when the session ends (end, Esc, postpone, time limit, shell restart). Windows you
+      out of sight, and come back when the session ends (end, Ctrl+Q, postpone, time limit, shell restart). Windows you
       open land on the empty workspace. --no-hide: keep their windows on screen, for a test that needs the
       existing windows (e.g. it moves or reads an app the person already has open).
-      P = the person wants to test later: they type minutes, the banner turns into a "paused"
+      Ctrl+P = the person wants to test later: they type minutes, the banner turns into a "paused"
       pill and this prints postpone:<minutes> (exit 5). Wait that long, then run talk-to-me start again.
       Exit codes: 0 human/solo, 1 error, 4 cancelled, 5 postponed.
   talk-to-me ask "QUESTION" [--text] [--timeout SEC]
-      Shows the question; Y / N / ? answers (T = the person types a reply instead).
+      Shows the question; Ctrl+Y / Ctrl+N / Ctrl+/ answers (Ctrl+T = the person types a reply instead).
       With --text a textbox opens at once (use it for open questions: "What do you see?").
       P = the person wants to postpone the test: they type minutes, the banner turns into a
       "paused" pill and this prints postpone:<minutes> (exit 5). The session is already over:
       stop touching the desktop, wait that long, then run talk-to-me start again.
       Prints yes | no | unsure | text:<typed answer> | postpone:<min> | timeout | ended.
-      "timeout" is printed at once in solo mode. "ended" = the person pressed Esc:
+      "timeout" is printed at once in solo mode. "ended" = the person pressed Ctrl+Q:
       stop testing. Exit codes: 0 answered, 1 error, 3 no session (run talk-to-me start), 4 ended, 5 postponed.
   talk-to-me question "QUESTION" [--text] [--timeout SEC]      (EXPERIMENTAL, off by default)
       A plain question card with no testing session and no banner, for a decision you are
-      blocked on while the person works in another app. Y / N / ? / T (type) answer, Esc dismisses.
+      blocked on while the person works in another app. Ctrl+Y / Ctrl+N / Ctrl+/ / Ctrl+T (type) answer, Ctrl+Q dismisses.
       Prints yes | no | unsure | text:<typed> | dismissed | timeout | busy.
       Exit codes: 0 answered, 4 dismissed, 6 not allowed (setting is off, or asked too soon after
       the last question): decide yourself or use your normal question channel.
@@ -291,7 +291,7 @@ case $cmd in
     trap on_signal INT TERM
     trap cleanup EXIT
     call ask "$ID" "$question" "$timeout" "$kind" >/dev/null
-    # typing a reply (T) can extend a choice question by up to 90 s
+    # typing a reply (Ctrl+T) can extend a choice question by up to 90 s
     grace=8; [[ $kind == choice ]] && grace=98
     grace=$((grace + 125))  # Ctrl-alone hold: up to 120 s
     result=$(wait_result $((timeout + grace))) || { ipc cancel "$ID" >/dev/null 2>&1; result=timeout; }
@@ -415,7 +415,8 @@ case $cmd in
     [[ $state == *'"phase":"active"'* ]] && exit 0
     cat >&2 <<MSG
 Blocked: ${1:-this} opens a window on the user's live desktop and no Background Worker Talk To Me session is active.
-Run:  talk-to-me start "<your name>: <what you will do>" [--work if you are not testing] --help "watch the screen and press Y/N after each change"
+FIRST: can this run in a VM or a nested compositor instead? If it does not need the user's real logins, GPU or monitors, test there and no session is needed.
+Run:  talk-to-me start "<your name>: <what you will do>" [--work if you are not testing] --help "watch the screen and answer Ctrl+Y / Ctrl+N after each change"
 (10 s countdown + TESTING banner, so the user keeps mouse and keyboard to themselves). Then repeat this command,
 and finish with:  talk-to-me end
 If talk-to-me start prints "cancelled" or "postpone:<min>": touch nothing, do other work, retry later.

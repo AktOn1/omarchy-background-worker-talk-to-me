@@ -9,6 +9,8 @@ For Claude Code there is also a ready-made skill, see [skill/background-worker-t
 ```markdown
 ## Desktop testing with human feedback (Background Worker Talk To Me)
 
+Before anything else, check whether the test can run in a virtual machine (or a nested compositor) instead of on the human's real desktop. If it does not need their real logins, GPU or monitors, run it there: no session, no banner, no risk. Only start a session for what truly needs the real desktop.
+
 A session (countdown + banner) is for work where the human's screen, keyboard or mouse and your test could disturb each other. Work that cannot touch them needs none: files and code, `--headless` runs, a nested compositor on a virtual `HEADLESS-n` monitor, commands aimed at another compositor (own `HYPRLAND_INSTANCE_SIGNATURE` / `WAYLAND_DISPLAY`). Do not start a session for those (prefix a command `TALK_TO_ME_ISOLATED=1` if the guard still blocks it and you are sure it is isolated). If a window opens on a monitor the human looks at, it is not isolated.
 
 When a task makes you change what is visible on the desktop (moving or resizing windows,
@@ -21,16 +23,16 @@ guessing from screenshots.
    postpones or cancels it, otherwise it runs out and you continue alone (solo mode:
    `talk-to-me ask` prints `timeout` at once). If a human's eyes would be faster or more reliable than
    you testing alone, ask for help: `talk-to-me start "short title" --help "watch the screen and
-   press Y/N after each window move"`. The card shows that text with a Y key; if they press Y
-   you get `human` and `talk-to-me ask` works. Without `--help` there is no Y key and no one to ask. It can also print `cancelled` (Esc: not now; touch nothing, do other work, retry later) or `postpone:<min>` (P, exit code 5: do other non-visual work for `<min>` minutes, then run `talk-to-me start` again). Do not start a second session while one is open.
+   answer Ctrl+Y / Ctrl+N after each window move"`. The card shows that text with a Ctrl+Y key; if they press Ctrl+Y
+   you get `human` and `talk-to-me ask` works. Without `--help` there is no Ctrl+Y key and no one to ask. It can also print `cancelled` (Ctrl+Q: not now; touch nothing, do other work, retry later) or `postpone:<min>` (Ctrl+P, exit code 5: do other non-visual work for `<min>` minutes, then run `talk-to-me start` again). Do not start a second session while one is open.
    **Not testing?** If you only restart the shell, reload Hyprland, install a plugin or do other work on the desktop that is not a test, add `--work`: `talk-to-me start "short title" --work --estimate 1m`. The screens then say WORKING instead of TESTING; everything else is the same, and you usually have nothing to `ask`.
    **Empty screens:** once the session is working, every screen shows an empty workspace (the human's windows are out of sight, not moved or closed) and comes back at `talk-to-me end`. Windows you open land on that empty workspace. If your test needs the human's existing windows (you move or read an app they already have open), start with `--no-hide`.
 2. Ask right after each visible change, before the next one (do not run all the steps and ask at the end). Ask ONLY through `talk-to-me ask`, never in the terminal/chat or with a built-in question tool such as AskUserQuestion: the human is looking at the desktop, not at your terminal. One question that can be answered by looking:
    `talk-to-me ask "Did the window move from left to right?"`. It prints exactly one of
    `yes`, `no`, `unsure`, `text:<reply>`, `postpone:<min>`, `timeout` or `ended` and exits. Act on it:
-   - `ended`: the human pressed Esc. Stop all visible changes, restore what you changed, and report.
+   - `ended`: the human pressed Ctrl+Q. Stop all visible changes, restore what you changed, and report.
    - `yes`: continue.
-   - `text:<reply>`: the human typed a reply (they pressed T on a yes/no card). Read it as their answer or comment and act on it.
+   - `text:<reply>`: the human typed a reply (they pressed Ctrl+T on a yes/no card). Read it as their answer or comment and act on it.
    - `postpone:<min>` (exit code 5, also from `talk-to-me start`): the human wants to test later. The session is already closed. Stop touching the desktop now, restore what you changed, do other non-visual work or wait `<min>` minutes, then run `talk-to-me start` again and continue with the same step.
    - `no`: fix and ask again (at most 3 attempts per question, then report what you tried).
    - `unsure` / `timeout`: do not treat as success. Try a screenshot check, or say in your report that the result was not confirmed.

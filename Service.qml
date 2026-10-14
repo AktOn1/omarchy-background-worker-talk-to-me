@@ -6,7 +6,7 @@
 // never takes the keyboard.
 //
 // IPC (target "talk-to-me"; the `talk-to-me` command wraps these and polls the result files):
-//   start <id> <label> <countdownSec> <maxMinutes> <help> <estimateSec> <shield> <kind> <hide>   countdown (Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
+//   start <id> <label> <countdownSec> <maxMinutes> <help> <estimateSec> <shield> <kind> <hide>   countdown (Ctrl+Y only when <help> is non-empty), result file: human | solo | cancelled | postpone:<min>
 //   ask <id> <question> <timeoutSec> <choice|text>   result file: yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 //   quick <id> <question> <timeoutSec> <choice|text>  (experimental) like ask, but also works with no session: a plain
 //                                                question card, no banner. result file adds: busy | dismissed
@@ -40,7 +40,7 @@ Scope {
   // test | work: "work" = the agent restarts the shell or similar, not testing; the screens say WORKING instead of TESTING
   property string kind: "test"
   readonly property bool working: kind === "work"
-  // what the agent asks the person to help with; empty = no help wanted, so the countdown has no Y key
+  // what the agent asks the person to help with; empty = no help wanted, so the countdown has no Ctrl+Y key
   property string helpText: ""
   property string startId: ""
   property int countdownTotal: 5
@@ -49,7 +49,7 @@ Scope {
   property string question: ""
   property int askTotal: 60
   property int askLeft: 0
-  // true while the free-text box is open; typeOnly = the question was asked as "text" (Esc stops the test)
+  // true while the free-text box is open; typeOnly = the question was asked as "text" (Ctrl+Q stops the test)
   property bool typing: false
   property bool typeOnly: false
   // true while the "postpone for how many minutes" box is open (typing is true too)
@@ -405,6 +405,13 @@ Scope {
 
   Timer { id: guardTimer; onTriggered: root.inputGuarded = false }
 
+  function keyName(event) {
+    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) return "enter"
+    if (event.key === Qt.Key_Slash || event.key === Qt.Key_Question) return "/"
+    if (event.key >= Qt.Key_A && event.key <= Qt.Key_Z) return String.fromCharCode(event.key).toLowerCase()
+    return ""
+  }
+
   function handleKey(event) {
     if (event.key !== Qt.Key_Control && root.guardHit()) {
       root.ctrlArmed = false
@@ -414,8 +421,7 @@ Scope {
     if (root.ctrlPress(event)) return
     if (event.isAutoRepeat) { event.accepted = true; return }
     if (root.typing) return
-    const enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
-    const action = Model.keyAction(root.promptKind, enter ? "\n" : event.text, event.key === Qt.Key_Escape)
+    const action = Model.keyAction(root.promptKind, root.keyName(event), (event.modifiers & Qt.ControlModifier) !== 0)
     if (action === "") return
     event.accepted = true
     root.act(action)
@@ -878,7 +884,7 @@ Scope {
       readonly property bool bar: root.promptKind === "countdown"
       screen: modelData
       visible: root.promptOpen
-      anchors { top: bar; bottom: !bar; right: !bar }
+      anchors { top: bar; bottom: !bar; right: !bar || root.held }
       margins.top: root.cornerTop
       margins.bottom: root.cornerSide
       margins.right: root.cornerSide
@@ -948,8 +954,9 @@ Scope {
 
       Rectangle {
         id: card
-        readonly property real zoom: prompt.bar ? 1.2 : 1.0
-        width: prompt.bar ? Style.space(720) : Style.space(440)
+        readonly property bool compact: root.held
+        readonly property real zoom: prompt.bar && !compact ? 1.2 : 1.0
+        width: compact ? Style.space(340) : prompt.bar ? Style.space(720) : Style.space(440)
         height: cardCol.implicitHeight + Style.space(28)
         radius: Style.cornerRadius
         color: Util.alpha(Color.background, 0.97)
@@ -958,22 +965,22 @@ Scope {
 
         readonly property var chips: {
           const ctrl = { key: "Ctrl", action: "hold", primary: true, text: root.held ? "resume (auto " + root.holdLeft + " s)" : "pause timer" }
-          if (root.postponing) return [ ctrl, { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Esc", text: "back", action: "esc" } ]
+          if (root.postponing) return [ ctrl, { key: "Enter", text: "postpone (min)", action: "send" }, { key: "Ctrl+Q", text: "back", action: "esc" } ]
           if (prompt.bar) {
             const list = [ ctrl ]
-            if (root.helpText !== "") list.push({ key: "Y", text: "I'll help", action: "human" })
-            list.push({ key: "Enter", text: "start now", action: "start" }, { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: "cancel", action: "end" })
+            if (root.helpText !== "") list.push({ key: "Ctrl+Y", text: "I'll help", action: "human" })
+            list.push({ key: "Ctrl+Enter", text: "start now", action: "start" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Ctrl+Q", text: "cancel", action: "end" })
             return list
           }
           if (root.typing) {
             return root.standalone
-              ? [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Esc", text: root.typeOnly ? "dismiss" : "back", action: "esc" } ]
-              : [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.typeOnly ? (root.working ? "stop work" : "stop test") : "back", action: "esc" } ]
+              ? [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+Q", text: root.typeOnly ? "dismiss" : "back", action: "esc" } ]
+              : [ ctrl, { key: "Enter", text: "send", action: "send" }, { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Ctrl+Q", text: root.typeOnly ? (root.working ? "stop work" : "stop test") : "back", action: "esc" } ]
           }
-          const answers = [ { key: "Y", text: "yes", action: "yes" }, { key: "N", text: "no", action: "no" }, { key: "?", text: "unsure", action: "unsure" }, { key: "T", text: "type", action: "type" } ]
+          const answers = [ { key: "Ctrl+Y", text: "yes", action: "yes" }, { key: "Ctrl+N", text: "no", action: "no" }, { key: "Ctrl+/", text: "unsure", action: "unsure" }, { key: "Ctrl+T", text: "type", action: "type" } ]
           return root.standalone
-            ? [ ctrl ].concat(answers, [ { key: "Esc", text: "dismiss", action: "end" } ])
-            : [ ctrl ].concat(answers, [ { key: "P", text: "postpone", action: "postpone" }, { key: "Esc", text: root.working ? "stop work" : "stop test", action: "end" } ])
+            ? [ ctrl ].concat(answers, [ { key: "Ctrl+Q", text: "dismiss", action: "end" } ])
+            : [ ctrl ].concat(answers, [ { key: "Ctrl+P", text: "postpone", action: "postpone" }, { key: "Ctrl+Q", text: root.working ? "stop work" : "stop test", action: "end" } ])
         }
 
         MouseArea {
@@ -1002,18 +1009,18 @@ Scope {
             Text {
               visible: prompt.bar
               anchors.verticalCenter: parent.verticalCenter
-              width: visible ? Style.space(96) : 0
+              width: visible ? Style.space(card.compact ? 56 : 96) : 0
               horizontalAlignment: Text.AlignHCenter
               textFormat: Text.PlainText
               text: root.countdownLeft
               font.family: Style.font.family
-              font.pixelSize: Math.round(Style.font.displayLarge * 1.8)
+              font.pixelSize: Math.round(Style.font.displayLarge * (card.compact ? 1.0 : 1.8))
               font.bold: true
               color: root.held ? Util.alpha(Color.popups.text, 0.4) : Color.urgent
             }
 
             Column {
-              width: parent.width - (prompt.bar ? Style.space(112) : 0)
+              width: parent.width - (prompt.bar ? Style.space(card.compact ? 72 : 112) : 0)
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.space(4)
 
@@ -1043,7 +1050,7 @@ Scope {
                 text: prompt.bar ? root.label : root.question
               }
               Text {
-                visible: prompt.bar && root.helpText !== ""
+                visible: prompt.bar && !card.compact && root.helpText !== ""
                 width: parent.width
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
@@ -1054,7 +1061,7 @@ Scope {
                 text: "Faster with your help: " + root.helpText
               }
               Text {
-                visible: prompt.bar
+                visible: prompt.bar && !card.compact
                 width: parent.width
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
@@ -1098,13 +1105,17 @@ Scope {
                   font.pixelSize: Math.round(Style.font.body * card.zoom)
                   Keys.onReturnPressed: root.submitText(text)
                   Keys.onEnterPressed: root.submitText(text)
-                  Keys.onEscapePressed: root.escapeTyping()
                   onTextEdited: root.replyText = text
                   Binding { target: replyInput; property: "text"; value: root.replyText }
                   Keys.onReleased: event => root.ctrlRelease(event)
                   Keys.onPressed: event => {
                     if (root.ctrlPress(event)) return
                     if (event.matches(StandardKey.Paste) || ((event.modifiers & Qt.ShiftModifier) && event.key === Qt.Key_Insert)) { event.accepted = true; return }
+                    if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_Q) {
+                      event.accepted = true
+                      root.escapeTyping()
+                      return
+                    }
                     if (!root.postponing && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) {
                       event.accepted = true
                       root.openPostpone()
@@ -1140,7 +1151,7 @@ Scope {
           }
 
           Text {
-            visible: !prompt.bar && !root.typing && !root.postponing
+            visible: !prompt.bar && !card.compact && !root.typing && !root.postponing
             width: parent.width
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText

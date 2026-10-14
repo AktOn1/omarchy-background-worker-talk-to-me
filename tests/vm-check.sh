@@ -22,10 +22,10 @@ sleep 1.5
 "$T" end --quiet
 pkill -x foot
 echo "--no-hide keeps the windows on screen"
-# postponing (P, 2 minutes) must hold: a second start gets postpone:<min> at once and no countdown begins
+# postponing (Ctrl+P, 2 minutes) must hold: a second start gets postpone:<min> at once and no countdown begins
 "$T" start "vm check 3" --countdown 20 >/tmp/ttm-first 2>&1 &
 sleep 3
-wtype p; sleep 0.5; wtype 2; sleep 0.5; wtype -k Return
+wtype -M ctrl -k p -m ctrl; sleep 0.5; wtype 2; sleep 0.5; wtype -k Return
 wait
 grep -q '^postpone:2$' /tmp/ttm-first || fail "postpone P2 gave: $(cat /tmp/ttm-first)"
 second=$("$T" start "vm check 4" --countdown 1 2>&1); rc=$?
@@ -36,8 +36,8 @@ echo "start during a 2 minute postponement: $second, still paused"
 # typed reply works through the on-demand input box, and Ctrl+V / Shift+Insert / middle click paste nothing
 "$T" start "vm check 5" --help "answer one question" --countdown 20 >/tmp/ttm-human 2>&1 &
 sleep 3
-wtype y; wait
-grep -q '^human$' /tmp/ttm-human || fail "Y did not give human: $(cat /tmp/ttm-human)"
+wtype y; sleep 0.5; wtype -M ctrl -k y -m ctrl; wait
+grep -q '^human$' /tmp/ttm-human || fail "Ctrl+Y did not give human: $(cat /tmp/ttm-human)"
 echo -n PASTED | setsid wl-copy >/dev/null 2>&1 </dev/null
 "$T" ask "typed reply check" --text --timeout 20 >/tmp/ttm-reply 2>&1 &
 sleep 3
@@ -46,4 +46,43 @@ wait
 grep -qx 'text:ok' /tmp/ttm-reply || fail "typed reply gave '$(cat /tmp/ttm-reply)' (expected text:ok, nothing pasted)"
 pkill -x wl-copy
 echo "typed reply arrives as text:ok; Ctrl+V and Shift+Insert pasted nothing"
+"$T" end --quiet >/dev/null 2>&1
+# hotkeys need Ctrl: plain letters do nothing, Ctrl+N answers no
+"$T" start "vm check 6" --help "answer one question" --countdown 20 >/tmp/ttm-human 2>&1 &
+sleep 3
+wtype -M ctrl -k y -m ctrl; wait
+"$T" ask "plain key check" --timeout 20 >/tmp/ttm-ask 2>&1 &
+sleep 3
+wtype n; wtype y; sleep 1
+kill -0 $! 2>/dev/null || fail "a plain key answered the question: $(cat /tmp/ttm-ask)"
+wtype -M ctrl -k n -m ctrl; wait
+grep -qx 'no' /tmp/ttm-ask || fail "Ctrl+N gave '$(cat /tmp/ttm-ask)' (expected no)"
+echo "plain n/y ignored; Ctrl+N answers no"
+# paused: a tap on Ctrl shrinks the card and moves it to the right edge
+"$T" ask "pause layout check" --timeout 30 >/tmp/ttm-ask 2>&1 &
+sleep 3
+layer() { hyprctl -j layers | jq -c '[.. | objects | select(.namespace? == "background-worker-talk-to-me-prompt")] | .[0] | [.x,.y,.w,.h]'; }
+mon_w=$(hyprctl -j monitors | jq '.[0].width')
+before=$(layer)
+wtype -k Control_L; sleep 1
+after=$(layer)
+read -r ax ay aw ah < <(echo "$after" | jq -r 'join(" ")')
+read -r bx by bw bh < <(echo "$before" | jq -r 'join(" ")')
+grab="$VM_TEST_OUT"; mkdir -p "$grab" && grim "$grab/paused.png"
+(( aw < bw )) || fail "paused card not narrower ($before -> $after)"
+(( ax + aw > mon_w - 60 )) || fail "paused card not at the right edge ($after, monitor $mon_w)"
+echo "paused: card $bw x $bh -> $aw x $ah, right edge at $((ax + aw)) of $mon_w"
+wtype -M ctrl -k q -m ctrl; wait
+"$T" end --quiet >/dev/null 2>&1
+# paused countdown bar: wide and centred at the top while counting, small and on the right while paused
+"$T" start "vm check 7" --help "answer one question" --countdown 30 >/tmp/ttm-human 2>&1 &
+sleep 3
+read -r bx by bw bh < <(layer | jq -r 'join(" ")')
+wtype -k Control_L; sleep 1
+read -r ax ay aw ah < <(layer | jq -r 'join(" ")')
+grim "$VM_TEST_OUT/paused-countdown.png"
+(( bw > mon_w / 2 && bx + bw < mon_w - 100 )) || fail "running countdown bar not wide and centred ($bx $by $bw $bh)"
+(( aw < bw / 2 + 40 && ax + aw > mon_w - 60 )) || fail "paused countdown bar not small and on the right ($ax $ay $aw $ah)"
+echo "paused countdown: bar $bw x $bh at x=$bx -> $aw x $ah at x=$ax (right edge $((ax + aw)) of $mon_w)"
+wtype -M ctrl -k q -m ctrl; wait
 "$T" end --quiet >/dev/null 2>&1
