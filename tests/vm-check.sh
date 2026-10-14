@@ -33,3 +33,17 @@ second=$("$T" start "vm check 4" --countdown 1 2>&1); rc=$?
 [[ $("$T" status | jq -r .phase) == paused ]] || fail "postponement was overridden (phase $("$T" status | jq -r .phase))"
 echo "start during a 2 minute postponement: $second, still paused"
 "$T" end --quiet >/dev/null 2>&1
+# typed reply works through the on-demand input box, and Ctrl+V / Shift+Insert / middle click paste nothing
+"$T" start "vm check 5" --help "answer one question" --countdown 20 >/tmp/ttm-human 2>&1 &
+sleep 3
+wtype y; wait
+grep -q '^human$' /tmp/ttm-human || fail "Y did not give human: $(cat /tmp/ttm-human)"
+echo -n PASTED | setsid wl-copy >/dev/null 2>&1 </dev/null
+"$T" ask "typed reply check" --text --timeout 20 >/tmp/ttm-reply 2>&1 &
+sleep 3
+wtype -M ctrl -k v -m ctrl; wtype -M shift -k Insert -m shift; wtype ok; wtype -k Return
+wait
+grep -qx 'text:ok' /tmp/ttm-reply || fail "typed reply gave '$(cat /tmp/ttm-reply)' (expected text:ok, nothing pasted)"
+pkill -x wl-copy
+echo "typed reply arrives as text:ok; Ctrl+V and Shift+Insert pasted nothing"
+"$T" end --quiet >/dev/null 2>&1

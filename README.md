@@ -7,6 +7,7 @@
 Omarchy shell plugin for working with AI agents. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Y / N / ? or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
 
 ## What's new
+- **0.3.5 (2026-10-14):** the typed-answer box no longer exists until you open it, and it ignores paste (Ctrl+V, Shift+Insert, middle click), so a clipboard owner can never make the shell read an unbounded clipboard.
 - **0.3.4 (2026-10-13):** a postponed test stays postponed. If an agent runs `talk-to-me start` again before your pause is over (a retry, or a second agent), it now gets `postpone:<minutes left>` at once instead of starting a new countdown.
 - **0.3.3 (2026-10-13):** while the agent works, every screen switches to an empty workspace, so none of your windows are in the way or stuck on screen. Nothing is moved or closed; everything comes back when the session ends. Switch it off with `talk-to-me settings set hide off`, or per test with `--no-hide`.
 - **0.3.2 (2026-10-12):** `talk-to-me start "Restart shell" --work` for non-test desktop work (shell restart, plugin install): the screens say WORKING instead of TESTING. The agent installer now writes your agent settings and their backup with private permissions from the start.

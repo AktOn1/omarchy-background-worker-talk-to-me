@@ -892,7 +892,7 @@ Scope {
 
       function refocus() {
         if (!owner || !visible) return
-        if (root.typing) replyInput.forceActiveFocus()
+        if (root.typing && replyLoader.item) replyLoader.item.forceActiveFocus()
         else keys.forceActiveFocus()
       }
 
@@ -1073,38 +1073,52 @@ Scope {
             radius: Style.cornerRadius
             color: Style.normalFill
             border.width: 1
-            border.color: replyInput.activeFocus ? Color.accent : Style.normalBorderColor
+            border.color: replyLoader.item && replyLoader.item.activeFocus ? Color.accent : Style.normalBorderColor
 
-            TextInput {
-              id: replyInput
+            // Created only while the reply box is open, and without paste: a hidden or pasting field would read the whole clipboard from whoever owns it
+            Loader {
+              id: replyLoader
               anchors.fill: parent
-              anchors.leftMargin: Style.space(10)
-              anchors.rightMargin: Style.space(10)
-              verticalAlignment: TextInput.AlignVCenter
-              clip: true
-              maximumLength: root.postponing ? 4 : 500
-              inputMethodHints: root.postponing ? Qt.ImhDigitsOnly : Qt.ImhNone
-              validator: root.postponing ? minutesValidator : null
-              color: Color.popups.text
-              selectionColor: Color.accent
-              font.family: Style.font.family
-              font.pixelSize: Math.round(Style.font.body * card.zoom)
-              Keys.onReturnPressed: root.submitText(text)
-              Keys.onEnterPressed: root.submitText(text)
-              Keys.onEscapePressed: root.escapeTyping()
-              onTextEdited: root.replyText = text
-              Binding { target: replyInput; property: "text"; value: root.replyText }
-              Keys.onReleased: event => root.ctrlRelease(event)
-              Keys.onPressed: event => {
-                if (root.ctrlPress(event)) return
-                if (!root.postponing && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) {
-                  event.accepted = true
-                  root.openPostpone()
+              active: root.typing
+              onLoaded: prompt.refocus()
+              sourceComponent: Component {
+                TextInput {
+                  id: replyInput
+                  anchors.fill: parent
+                  anchors.leftMargin: Style.space(10)
+                  anchors.rightMargin: Style.space(10)
+                  verticalAlignment: TextInput.AlignVCenter
+                  clip: true
+                  maximumLength: root.postponing ? 4 : 500
+                  inputMethodHints: root.postponing ? Qt.ImhDigitsOnly : Qt.ImhNone
+                  validator: root.postponing ? minutesValidator : null
+                  color: Color.popups.text
+                  selectionColor: Color.accent
+                  font.family: Style.font.family
+                  font.pixelSize: Math.round(Style.font.body * card.zoom)
+                  Keys.onReturnPressed: root.submitText(text)
+                  Keys.onEnterPressed: root.submitText(text)
+                  Keys.onEscapePressed: root.escapeTyping()
+                  onTextEdited: root.replyText = text
+                  Binding { target: replyInput; property: "text"; value: root.replyText }
+                  Keys.onReleased: event => root.ctrlRelease(event)
+                  Keys.onPressed: event => {
+                    if (root.ctrlPress(event)) return
+                    if (event.matches(StandardKey.Paste) || ((event.modifiers & Qt.ShiftModifier) && event.key === Qt.Key_Insert)) { event.accepted = true; return }
+                    if (!root.postponing && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) {
+                      event.accepted = true
+                      root.openPostpone()
+                    }
+                  }
                 }
               }
             }
+            MouseArea {
+              anchors.fill: parent
+              acceptedButtons: Qt.MiddleButton
+            }
             Text {
-              visible: replyInput.text === ""
+              visible: root.replyText === ""
               anchors.left: parent.left
               anchors.leftMargin: Style.space(10)
               anchors.verticalCenter: parent.verticalCenter
