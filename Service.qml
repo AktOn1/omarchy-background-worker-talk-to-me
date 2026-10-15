@@ -506,7 +506,6 @@ Scope {
     }
   }
 
-  RegularExpressionValidator { id: minutesValidator; regularExpression: /[0-9]{0,4}/ }
 
   // Hides the person's windows (empty workspace per screen) for as long as a session is working; always switches back.
   readonly property string hideScript: decodeURIComponent(Qt.resolvedUrl("bin/talk-to-me-hide").toString().replace(/^file:\/\//, ""))
@@ -898,7 +897,7 @@ Scope {
 
       function refocus() {
         if (!owner || !visible) return
-        if (root.typing && replyLoader.item) replyLoader.item.forceActiveFocus()
+        if (root.typing && replyField.visible) replyField.forceActiveFocus()
         else keys.forceActiveFocus()
       }
 
@@ -1073,71 +1072,35 @@ Scope {
             }
           }
 
-          Rectangle {
+          // Drawn by the plugin (no Qt text input): those read the clipboard by themselves. Paste goes through a separate `wl-paste` process on Ctrl+V / Shift+Insert only.
+          PlainField {
+            id: replyField
             visible: root.typing
             width: parent.width
             height: Style.spacing.controlHeight
-            radius: Style.cornerRadius
-            color: Style.normalFill
-            border.width: 1
-            border.color: replyLoader.item && replyLoader.item.activeFocus ? Color.accent : Style.normalBorderColor
-
-            // Created only while the reply box is open, and without paste: a hidden or pasting field would read the whole clipboard from whoever owns it
-            Loader {
-              id: replyLoader
-              anchors.fill: parent
-              active: root.typing
-              onLoaded: prompt.refocus()
-              sourceComponent: Component {
-                TextInput {
-                  id: replyInput
-                  anchors.fill: parent
-                  anchors.leftMargin: Style.space(10)
-                  anchors.rightMargin: Style.space(10)
-                  verticalAlignment: TextInput.AlignVCenter
-                  clip: true
-                  maximumLength: root.postponing ? 4 : 500
-                  inputMethodHints: root.postponing ? Qt.ImhDigitsOnly : Qt.ImhNone
-                  validator: root.postponing ? minutesValidator : null
-                  color: Color.popups.text
-                  selectionColor: Color.accent
-                  font.family: Style.font.family
-                  font.pixelSize: Math.round(Style.font.body * card.zoom)
-                  Keys.onReturnPressed: root.submitText(text)
-                  Keys.onEnterPressed: root.submitText(text)
-                  onTextEdited: root.replyText = text
-                  Binding { target: replyInput; property: "text"; value: root.replyText }
-                  Keys.onReleased: event => root.ctrlRelease(event)
-                  Keys.onPressed: event => {
-                    if (root.ctrlPress(event)) return
-                    if (event.matches(StandardKey.Paste) || ((event.modifiers & Qt.ShiftModifier) && event.key === Qt.Key_Insert)) { event.accepted = true; return }
-                    if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_Q) {
-                      event.accepted = true
-                      root.escapeTyping()
-                      return
-                    }
-                    if (!root.postponing && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) {
-                      event.accepted = true
-                      root.openPostpone()
-                    }
-                  }
-                }
+            horizontalPadding: Style.space(10)
+            maximumLength: root.postponing ? 4 : 500
+            digitsOnly: root.postponing
+            foreground: Color.popups.text
+            placeholderText: root.postponing ? "Postpone for how many minutes? Enter sends" : "Click here, type your answer, Enter sends"
+            font: Qt.font({ family: Style.font.family, pixelSize: Math.round(Style.font.body * card.zoom) })
+            onVisibleChanged: if (visible) prompt.refocus()
+            onTextEdited: root.replyText = text
+            Binding { target: replyField; property: "text"; value: root.replyText }
+            onKeyDown: event => root.ctrlPress(event)
+            Keys.onReturnPressed: root.submitText(text)
+            Keys.onEnterPressed: root.submitText(text)
+            Keys.onReleased: event => root.ctrlRelease(event)
+            Keys.onPressed: event => {
+              if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_Q) {
+                event.accepted = true
+                root.escapeTyping()
+                return
               }
-            }
-            MouseArea {
-              anchors.fill: parent
-              acceptedButtons: Qt.MiddleButton
-            }
-            Text {
-              visible: root.replyText === ""
-              anchors.left: parent.left
-              anchors.leftMargin: Style.space(10)
-              anchors.verticalCenter: parent.verticalCenter
-              textFormat: Text.PlainText
-              text: root.postponing ? "Postpone for how many minutes? Enter sends" : "Click here, type your answer, Enter sends"
-              font.family: Style.font.family
-              font.pixelSize: Math.round(Style.font.body * card.zoom)
-              color: Util.alpha(Color.popups.text, 0.45)
+              if (!root.postponing && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) {
+                event.accepted = true
+                root.openPostpone()
+              }
             }
           }
 

@@ -42,19 +42,19 @@ second=$(TALK_TO_ME_ALLOW_SHORT_TITLE=1 "$T" start "vm check 4" --countdown 1 2>
 [[ $("$T" status | jq -r .phase) == paused ]] || fail "postponement was overridden (phase $("$T" status | jq -r .phase))"
 echo "start during a 2 minute postponement: $second, still paused"
 "$T" end --quiet >/dev/null 2>&1
-# typed reply works through the on-demand input box, and Ctrl+V / Shift+Insert / middle click paste nothing
+# typed reply works through the plugin-drawn input box; Ctrl+V and Shift+Insert paste through wl-paste
 TALK_TO_ME_ALLOW_SHORT_TITLE=1 "$T" start "vm check 5" --help "answer one question" --countdown 20 >/tmp/ttm-human 2>&1 &
 sleep 3
 wtype y; sleep 0.5; wtype -M ctrl -k y -m ctrl; wait
 grep -q '^human$' /tmp/ttm-human || fail "Ctrl+Y did not give human: $(cat /tmp/ttm-human)"
-echo -n PASTED | setsid wl-copy >/dev/null 2>&1 </dev/null
+echo -n PASTED | wl-copy >/dev/null 2>&1
 "$T" ask "typed reply check" --text --timeout 20 >/tmp/ttm-reply 2>&1 &
 sleep 3
-wtype -M ctrl -k v -m ctrl; wtype -M shift -k Insert -m shift; wtype ok; wtype -k Return
+wtype -M ctrl -k v -m ctrl; sleep 1; wtype -M shift -k Insert -m shift; sleep 1; wtype ok; wtype -k Return
 wait
-grep -qx 'text:ok' /tmp/ttm-reply || fail "typed reply gave '$(cat /tmp/ttm-reply)' (expected text:ok, nothing pasted)"
+grep -qx 'text:PASTEDPASTEDok' /tmp/ttm-reply || fail "typed reply gave '$(cat /tmp/ttm-reply)' (expected text:PASTEDPASTEDok)"
 pkill -x wl-copy
-echo "typed reply arrives as text:ok; Ctrl+V and Shift+Insert pasted nothing"
+echo "typed reply arrives as text:PASTEDPASTEDok (Ctrl+V and Shift+Insert pasted through wl-paste)"
 "$T" end --quiet >/dev/null 2>&1
 # hotkeys need Ctrl: plain letters do nothing, Ctrl+N answers no
 TALK_TO_ME_ALLOW_SHORT_TITLE=1 "$T" start "vm check 6" --help "answer one question" --countdown 20 >/tmp/ttm-human 2>&1 &
