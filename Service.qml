@@ -164,8 +164,8 @@ Scope {
     else if (root.askId !== "") root.answer("superseded")
     root.doneShow = false
     root.kind = Model.cleanKind(rawKind)
-    root.label = Model.cleanText(rawLabel, 60) || (root.working ? "Desktop work" : "Desktop testing")
-    root.helpText = Model.cleanText(rawHelp, 160)
+    root.label = Model.cleanText(rawLabel, Model.DEFAULTS.labelMax) || (root.working ? "Desktop work" : "Desktop testing")
+    root.helpText = Model.cleanText(rawHelp, Model.DEFAULTS.longMax)
     root.startId = cid
     root.countdownTotal = Model.clampInt(rawCountdown, 1, 30, Model.DEFAULTS.countdown)
     root.countdownLeft = root.countdownTotal
@@ -227,7 +227,7 @@ Scope {
     }
     if (root.askId !== "") root.writeResult(root.askId, "superseded")
     const kind = Model.askKind(rawKind)
-    root.question = Model.cleanText(rawQuestion, 160) || "?"
+    root.question = Model.cleanText(rawQuestion, Model.DEFAULTS.longMax) || "?"
     root.askTotal = Model.clampInt(rawTimeout, 3, 600, kind === "text" ? Model.DEFAULTS.textTimeout : Model.DEFAULTS.askTimeout)
     root.askLeft = root.askTotal
     root.typeOnly = kind === "text"
@@ -246,7 +246,7 @@ Scope {
       return "ok"
     }
     const kind = Model.askKind(rawKind)
-    root.question = Model.cleanText(rawQuestion, 160) || "?"
+    root.question = Model.cleanText(rawQuestion, Model.DEFAULTS.longMax) || "?"
     root.askTotal = Model.clampInt(rawTimeout, 3, 600, kind === "text" ? Model.DEFAULTS.textTimeout : Model.DEFAULTS.askTimeout)
     root.askLeft = root.askTotal
     root.typeOnly = kind === "text"
@@ -319,7 +319,7 @@ Scope {
 
   function say(rawText) {
     if (root.phase === "idle" || root.phase === "paused") return "error:no session"
-    root.sayText = Model.cleanText(rawText, 160)
+    root.sayText = Model.cleanText(rawText, Model.DEFAULTS.longMax)
     if (root.sayText !== "") sayTimer.restart()
     return "ok"
   }
@@ -333,7 +333,7 @@ Scope {
   }
 
   function notice(rawText, rawSeconds) {
-    const text = Model.cleanText(rawText, 160)
+    const text = Model.cleanText(rawText, Model.DEFAULTS.longMax)
     if (text === "") return "error:empty"
     if (root.phase !== "idle") return "ok"
     root.noticeText = text
@@ -662,7 +662,7 @@ Scope {
             }
             Text {
               width: Math.min(implicitWidth, Style.space(340))
-              elide: Text.ElideRight
+              wrapMode: Text.WordWrap
               textFormat: Text.PlainText
               color: Color.popups.text
               font.family: Style.font.family
@@ -810,7 +810,7 @@ Scope {
             }
             Text {
               width: Math.min(implicitWidth, Style.space(300))
-              elide: Text.ElideRight
+              wrapMode: Text.WordWrap
               textFormat: Text.PlainText
               color: Color.popups.text
               font.family: Style.font.family

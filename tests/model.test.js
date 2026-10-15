@@ -18,6 +18,8 @@ assert.strictEqual(M.clampInt("x", 1, 10, 5), 5)
 
 assert.strictEqual(M.cleanText("  hi\n\tthere ", 50), "hi there")
 assert.strictEqual(M.cleanText("abcdefghij", 5), "abcd…")
+assert.strictEqual(M.cleanText("x".repeat(240), M.DEFAULTS.labelMax).length, 240)
+assert.ok(M.DEFAULTS.longMax >= 300)
 
 assert.strictEqual(M.keyAction("countdown", "y", true), "human")
 assert.strictEqual(M.keyAction("countdown", "Y", true), "human")

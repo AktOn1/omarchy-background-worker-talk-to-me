@@ -1,6 +1,6 @@
 #!/bin/bash
 # talk-to-me: command line for the Background Worker Talk To Me Omarchy shell plugin.
-# Usage: talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--work] [--countdown SEC] [--max MIN] [--no-shield] [--no-hide]   -> human | solo | cancelled | postpone:<min>
+# Usage: talk-to-me start TITLE [--help TEXT] [--estimate DUR] [--work] [--countdown SEC] [--max MIN] [--no-shield] [--no-hide]   -> human | solo | cancelled | postpone:<min>
 #        talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 #        talk-to-me question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
 #        talk-to-me say "TEXT"
@@ -16,6 +16,9 @@ usage() {
 talk-to-me: Background Worker Talk To Me
 
   talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--work] [--countdown SEC] [--max MIN] [--no-shield] [--no-hide]
+      TITLE (required): one full sentence the person reads on the card and banner, never cut off (max 240 characters):
+      who you are, exactly what is tested or done, and for which project or reason. Too short or generic titles
+      ("Desktop testing", "demo") are refused with exit 2 and nothing starts.
       Countdown banner (default 10 s). It is a heads-up, not a question: the person who is at the
       desk postpones (Ctrl+P) or cancels (Ctrl+Q), otherwise it runs out and you continue alone ("solo";
       "talk-to-me ask" then prints "timeout" at once). No Ctrl+Y key unless you pass --help.
@@ -100,6 +103,28 @@ ipc() {
 }
 
 die() { echo "talk-to-me: $1" >&2; exit 1; }
+
+# The title is the only thing the person sees about the run: it must say what and why, in full.
+check_title() {
+  [[ ${TALK_TO_ME_ALLOW_SHORT_TITLE:-} == 1 ]] && return 0
+  local t=$1 words
+  t=${t//[[:space:]]/ }
+  words=$(wc -w <<<"$t")
+  if (( ${#t} > 240 )); then
+    echo "talk-to-me: the title is ${#t} characters; the limit is 240 (it is shown in full, never cut off). Shorten it." >&2
+    exit 2
+  fi
+  if (( words < 5 || ${#t} < 30 )); then
+    cat >&2 <<'MSG'
+talk-to-me: the title does not say what is being done. Nothing was started.
+The person reads ONLY this title. Write one complete sentence: who you are, exactly what you test or do, and for which project or reason.
+  talk-to-me start "Claude Code: checking the new window-move animation of the Fullscreen Auto Workspace plugin on workspace 3" --estimate 3m
+  talk-to-me start "Claude Code: restarting the Omarchy shell to load the updated Ask Me While Testing plugin" --work --estimate 1m
+Not: "Desktop testing", "demo", "plugin check". Max 240 characters, shown in full.
+MSG
+    exit 2
+  fi
+}
 
 # Calls the plugin; fails with a clear message when the shell or plugin is not there.
 # extra_agent_env: true when an env variable named in ~/.config/background-worker-talk-to-me/agent-env (one name per line) is set
@@ -258,12 +283,13 @@ case $cmd in
       esac
     done
     [[ $countdown =~ ^[0-9]+$ && $max =~ ^[0-9]+$ ]] || die "--countdown and --max take whole numbers"
+    check_title "$label"
     mkdir -p -m 700 "$RUNTIME_DIR"
     ID=$(new_id)
     trap on_signal INT TERM
     trap cleanup EXIT
     wait_password_prompt
-    call start "$ID" "${label:-$([[ $kind == work ]] && echo "Desktop work" || echo "Desktop testing")}" "$countdown" "$max" "$help" "$estimate" "$([[ $shield == off ]] && echo 0 || echo 1)" "$kind" "$([[ $hide == off ]] && echo 0 || echo 1)" >/dev/null
+    call start "$ID" "$label" "$countdown" "$max" "$help" "$estimate" "$([[ $shield == off ]] && echo 0 || echo 1)" "$kind" "$([[ $hide == off ]] && echo 0 || echo 1)" >/dev/null
     # typing a postpone time (P) pauses the countdown for up to 60 s
     result=$(wait_result $((countdown + 70 + 125))) || { ipc cancel "$ID" >/dev/null 2>&1; die "no answer from the plugin"; }
     echo "$result"

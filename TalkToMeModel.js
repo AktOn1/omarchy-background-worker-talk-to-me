@@ -1,7 +1,7 @@
 .pragma library
 
 var ID_RE = /^[A-Za-z0-9_-]{4,40}$/
-var DEFAULTS = { countdown: 10, askTimeout: 60, textTimeout: 120, maxMinutes: 20, sayMs: 8000, holdSec: 120, textMax: 500, postponeMax: 240, guardMs: 1500, guardQuietMs: 900, guardCapMs: 6000 }
+var DEFAULTS = { countdown: 10, askTimeout: 60, textTimeout: 120, maxMinutes: 20, sayMs: 8000, holdSec: 120, textMax: 500, labelMax: 240, longMax: 300, postponeMax: 240, guardMs: 1500, guardQuietMs: 900, guardCapMs: 6000 }
 
 // Input guard: after a card appears, keys and clicks are ignored for guardMs; every ignored
 // event extends it until the person has been quiet for guardQuietMs (at most guardCapMs after opening).
