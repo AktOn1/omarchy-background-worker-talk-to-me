@@ -38,7 +38,7 @@ echo "start during a 2 minute postponement: $second, still paused"
 sleep 3
 wtype y; sleep 0.5; wtype -M ctrl -k y -m ctrl; wait
 grep -q '^human$' /tmp/ttm-human || fail "Ctrl+Y did not give human: $(cat /tmp/ttm-human)"
-echo -n PASTED | setsid wl-copy >/dev/null 2>&1 </dev/null
+echo -n PASTED | wl-copy >/dev/null 2>&1
 "$T" ask "typed reply check" --text --timeout 20 >/tmp/ttm-reply 2>&1 &
 sleep 3
 wtype -M ctrl -k v -m ctrl; sleep 1; wtype -M shift -k Insert -m shift; sleep 1; wtype ok; wtype -k Return
