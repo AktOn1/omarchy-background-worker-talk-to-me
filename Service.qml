@@ -86,6 +86,12 @@ Scope {
   // screen whose card owns the keyboard while a prompt is open
   property var promptScreen: null
   // "work is done" card (green checkmark) shown after the agent ends an active session
+  // hardware announcements (talk-to-me need cpu|vm|gpu): bin/talk-to-me-hw keeps hw/state.json, this only draws it
+  property var hwEntries: []
+  property double hwNow: Math.floor(Date.now() / 1000)
+  property int hwIdle: 0
+  readonly property var hwPills: Model.hwView(root.hwEntries, root.hwNow)
+
   property bool doneShow: false
   property bool doneFading: false
   property string doneLabel: ""
@@ -697,6 +703,114 @@ Scope {
           onClicked: {
             if (root.guardHit()) return
             if (root.phase === "idle") root.noticeText = ""; else root.endSession("cancelled", "ended")
+          }
+        }
+      }
+    }
+  }
+
+  // ---- hardware pills: who holds or waits for CPU/RAM, a VM or the GPU (every screen, below the badge, click-through) ----
+
+  FileView {
+    id: hwFile
+    path: root.runtimeDir + "/hw/state.json"
+    onLoaded: root.hwEntries = Model.hwParse(hwFile.text())
+    onLoadFailed: root.hwEntries = []
+  }
+  Timer {
+    interval: 1000
+    running: true
+    repeat: true
+    onTriggered: {
+      root.hwNow = Math.floor(Date.now() / 1000)
+      root.hwIdle = (root.hwIdle + 1) % 3
+      if (root.hwPills.length > 0 || root.hwIdle === 0) hwFile.reload()
+    }
+  }
+
+  Variants {
+    model: Quickshell.screens
+
+    PanelWindow {
+      id: hwWin
+      required property var modelData
+      screen: modelData
+      visible: root.hwPills.length > 0
+      anchors { bottom: true; right: true }
+      margins.bottom: Style.space(16)
+      margins.right: root.cornerSide
+      implicitWidth: hwCol.width
+      implicitHeight: hwCol.height
+      color: "transparent"
+      mask: Region {}
+      exclusionMode: ExclusionMode.Ignore
+      WlrLayershell.namespace: "background-worker-talk-to-me-hardware"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+      Column {
+        id: hwCol
+        spacing: Style.space(6)
+
+        Repeater {
+          model: root.hwPills
+
+          Rectangle {
+            id: pill
+            required property var modelData
+            readonly property color tone: modelData.queued ? Qt.darker(Color.accent, 1.6) : Color.accent
+            width: Math.min(Style.space(460), Math.max(Style.space(240), pillRow.implicitWidth + Style.space(20)))
+            height: pillRow.implicitHeight + Style.space(14)
+            radius: Style.cornerRadius
+            color: Util.alpha(Color.background, 0.96)
+            border.width: Math.max(2, Style.space(2))
+            border.color: tone
+
+            Row {
+              id: pillRow
+              anchors.centerIn: parent
+              spacing: Style.space(10)
+
+              Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: kindText.implicitWidth + Style.space(14)
+                height: kindText.implicitHeight + Style.space(8)
+                radius: height / 2
+                color: pill.tone
+                Text {
+                  id: kindText
+                  anchors.centerIn: parent
+                  textFormat: Text.PlainText
+                  text: pill.modelData.label
+                  color: Color.background
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                }
+              }
+
+              Column {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(2)
+                Text {
+                  width: Math.min(implicitWidth, Style.space(340))
+                  wrapMode: Text.WordWrap
+                  textFormat: Text.PlainText
+                  color: Color.popups.text
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  text: pill.modelData.title
+                }
+                Text {
+                  textFormat: Text.PlainText
+                  color: Color.popups.text
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                  text: (pill.modelData.queued ? "" : "in use  ·  ") + pill.modelData.line
+                }
+              }
+            }
           }
         }
       }

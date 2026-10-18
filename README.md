@@ -4,9 +4,10 @@
 
 ![An agent tests on the desktop: TESTING badge with time ring top right, question card with Ctrl+Y / Ctrl+N / Ctrl+/ answers bottom right](docs/hero.gif)
 
-Omarchy shell plugin for working with AI agents. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Ctrl+Y / Ctrl+N / Ctrl+/ or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
+Omarchy shell plugin for working with AI agents. An agent tells you when it needs the hardware you also feel: your screen, keyboard and mouse, a heavy CPU/RAM job, a VM with lots of resources, the GPU. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Ctrl+Y / Ctrl+N / Ctrl+/ or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
 
 ## What's new
+- **0.4.0 (2026-10-18):** agents announce the hardware they need. `talk-to-me need cpu|vm|gpu "<what and why>" --estimate 10m` before a heavy CPU/RAM job, a VM with lots of resources or heavy GPU use, `talk-to-me release ...` after; a pill at the bottom right of every screen shows who uses what and for how long. The screen, keyboard and mouse stay `talk-to-me start`. New bar icon (a small chip) with the current holders, a Release button per entry and every setting of the plugin. Optional queue (`hw-queue`): the next agent waits in line instead of sharing the resource. Optional enforcement (`hw-enforce`): the guard hook blocks known heavy commands (`ollama run`, `vm-test`, `stress-ng`, big encodes) until they are announced.
 - **0.3.8 (2026-10-15):** titles, questions, help and status lines are shown in full (wrapped over several lines, up to 240 characters for the title) instead of cut off. `talk-to-me start` now needs a real title (who, what exactly, for which project or reason, 5+ words); "Desktop testing" or "demo" are refused with exit 2 so you always know what is being tested.
 - **0.3.7 (2026-10-15):** the typed-answer box no longer uses Qt's built-in text input, which reads the clipboard by itself whenever another program changes it. It is drawn by the plugin now (`PlainField.qml`) and never touches the clipboard on its own. Typing, selecting, Enter and Ctrl+Q work as before. Ctrl+V and Shift+Insert paste through a separate `wl-paste` process (2-second deadline, size limit); middle click does not paste.
 - **0.3.6 (2026-10-14):** every card hotkey now needs Ctrl (Ctrl+Y yes, Ctrl+N no, Ctrl+/ unsure, Ctrl+T type, Ctrl+P postpone, Ctrl+Q stop or cancel, Ctrl+Enter start now; Enter still sends in the typing box), so stray letters while you type can never answer anything. A paused card (tap Ctrl) shrinks and sits at the right edge. Agents are told to check for a VM first.
@@ -59,6 +60,24 @@ Three layers, from "needs nothing" to "needs a hook". Omarchy can launch Claude 
 2. **Tool hook (agents that have one).** `talk-to-me-install-agent agents` installs a pre-tool hook for every agent found on the machine: Claude Code (`~/.claude/settings.json`), Codex (`~/.codex/hooks.json`), Gemini CLI (`~/.gemini/settings.json`) and OpenCode (a plugin in `~/.config/opencode/plugins/`). The hook refuses a command that touches your desktop, with instructions, until a `talk-to-me start` session is active. Tested live: Claude Code and OpenCode. Codex and Gemini CLI use the same hook protocol (JSON in, exit code 2 blocks) and are tested with simulated calls only.
 3. **Instructions (every agent).** The same command adds the instruction block to each agent's global instructions file (`CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, `~/.config/opencode/AGENTS.md`, `~/.pi/agent/AGENTS.md`). Any other agent: `talk-to-me-install-agent block FILE`.
 
+## Hardware announcements
+An agent that is about to use more than it should without telling you announces it first. Three kinds besides the screen (which is `talk-to-me start`):
+
+| Kind | Meant for (defaults, change them in the bar menu) |
+|---|---|
+| `cpu` | more than 8 GB RAM, or 8+ threads busy for 2+ minutes: big builds, encodes, test suites |
+| `vm` | a VM or container with more than 4 GB RAM, or any VM test run |
+| `gpu` | more than 2 GB VRAM, or load for 2+ minutes: image, voice and LLM models, GPU encodes |
+
+```
+talk-to-me need gpu "Claude Code: rendering the 4K comparison clips for the Omashaders gallery" --estimate 10m   -> granted
+talk-to-me release gpu                                                                               (or: release --id ID, release all)
+talk-to-me hardware [rules]                                                                         who holds what (JSON), or the thresholds
+```
+Every announcement shows as a pill at the bottom right of every screen (kind, title, "in use · about 4:54 left"); it expires by itself after `hw-max` minutes. The pill never takes clicks or keys. **Queue** (`hw-queue on`): only `hw-slots` agents hold a kind at the same time, the next one waits ("waiting, number 1 in line" on its pill, `need` blocks) and gets `granted` when the holder releases; a waiter that dies is dropped, one that waits longer than `hw-wait` gets `timeout` (exit 7). **Enforced** (`hw-enforce on`): the guard hook refuses known heavy commands (`ollama run|serve`, `llama-cli`, `whisper`, ComfyUI prompts, `vm-test`, `qemu-system-*`, `virt-install`, `stress-ng`, ffmpeg with x264/x265/AV1, `make -j8` and up) until the matching kind is announced. Add your own heavy commands to `~/.config/background-worker-talk-to-me/hw-commands`, one `gpu: tool` (or `cpu:` / `vm:`) per line. Hooks only see the command text, so this catches the usual suspects, not every possible job.
+
+**The bar icon.** Add "Talk To Me" in Omarchy's bar settings (a small chip). Its tooltip lists the current holders, a click opens the panel: the screen session, the hardware list with Release (or Leave, for a waiting agent), and all settings below as switches and steppers, plus the What's new button.
+
 ## Which commands are guarded
 The hook (layer 2) reads the command the agent is about to run and refuses it, with instructions, until a `talk-to-me start` session is active. It is **not** limited to one app. Built in: `wtype`, `ydotool`, `dotool`, `omarchy-restart-shell`, `hyprctl dispatch|reload|keyword`, and window launchers (`xdg-open`, `gtk-launch`, `omarchy-launch-*`, Godot without `--headless`, `play.sh`). Reads like `hyprctl clients` and headless runs pass.
 
@@ -92,6 +111,9 @@ The keyboard is grabbed only during the short start countdown (it needs it to he
 talk-to-me start [TITLE] [--help TEXT] [--estimate DUR] [--countdown SEC] [--max MIN] [--no-shield] [--no-hide]   -> human | solo | cancelled | postpone:<min>   (default 10 s, 20 min)
 talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended  (default 60 s, 120 s with --text)
 talk-to-me question "QUESTION" [--text] [--timeout SEC]   EXPERIMENTAL, off by default -> yes | no | unsure | text:<typed> | dismissed | timeout | busy | disabled | toosoon  (default 120 s)
+talk-to-me need cpu|vm|gpu "TITLE" [--estimate DUR] [--max MIN] [--wait SEC]   announce heavy hardware -> granted | timeout (7) | cancelled (4)
+talk-to-me release [cpu|vm|gpu|all] [--id ID]             give it back (also: expires after --max, default 60 min)
+talk-to-me hardware [rules]                               JSON of who holds what, or the thresholds
 talk-to-me settings [get KEY | set KEY VALUE | reset [KEY]]   list or change settings
 talk-to-me say "TEXT"                                     status line on the banner for 8 s, no answer
 talk-to-me eta DUR                                        revise the expected remaining time (90s, 3m, or minutes)
@@ -112,6 +134,14 @@ Stored in `~/.config/background-worker-talk-to-me/settings.conf` (plain `key=val
 | `watch` | `on` / `off` | `on` | agent watcher: banner when any agent opens a window with no session |
 | `shield` | `on` / `off` | `on` | invisible mouse shield over every screen during solo tests |
 | `hide` | `on` / `off` | `on` | switch every screen to an empty workspace while the agent works |
+| `hw-cpu` / `hw-vm` / `hw-gpu` | `on` / `off` | `on` | announce that kind (off: `need` returns `granted` at once, no pill) |
+| `hw-queue` | `on` / `off` | `off` | a busy kind makes the next agent wait in line |
+| `hw-slots` | 1-4 | 1 | agents that may hold one kind at the same time |
+| `hw-enforce` | `on` / `off` | `off` | the guard hook blocks known heavy commands that were not announced |
+| `hw-max` | 1-480 min | 60 | longest hold before an announcement expires |
+| `hw-wait` | 10-3600 s | 900 | longest wait in the queue |
+| `hw-gpu-vram`, `hw-vm-ram`, `hw-cpu-ram` | 1-128 GB | 2, 4, 8 | the thresholds agents are told |
+| `hw-cpu-threads`, `hw-minutes` | 1-256, 1-60 min | 8, 2 | "heavy CPU" = this many threads busy for this long |
 | `notice-seconds` | 3-120 s | 12 | how long that banner stays |
 | `question-timeout` | 3-600 s | 120 | how long a question card stays |
 | `question-gap` | 0-3600 s | 60 | minimum time between two questions |
@@ -168,7 +198,7 @@ rm -f ~/.local/bin/talk-to-me; rm -rf "$XDG_RUNTIME_DIR/talk-to-me" ~/.config/ba
 Opt-in only. One command sets up every agent it finds: `bin/talk-to-me-install-agent agents` (tool hooks for Claude Code, Codex, Gemini CLI and OpenCode, instruction blocks for those and pi, the Claude Code skill); undo with `agents-remove`; `status` shows what is on. Hooks apply to new agent sessions. For one agent only: `all ~/.claude/CLAUDE.md` (Claude skill + block + guard) or the parts `skill`, `block FILE`, `guard`. Manual route: [docs/agent-instructions.md](docs/agent-instructions.md) is a block to paste into AGENTS.md / CLAUDE.md, and [docs/skill/background-worker-talk-to-me/SKILL.md](docs/skill/background-worker-talk-to-me/SKILL.md) is a Claude Code skill (copy to `~/.claude/skills/background-worker-talk-to-me/`). No root AGENTS.md/CLAUDE.md on purpose (the marketplace rejects them).
 
 ## Develop and test
-- Logic: `node tests/model.test.js`.
+- Logic: `node tests/model.test.js`. Hardware bookkeeping: `bin/talk-to-me-hw` (state in `$XDG_RUNTIME_DIR/talk-to-me/hw/state.json`).
 - Scratch shell (does not touch your running shell): make a folder with symlinks to `/usr/share/omarchy/shell/Commons`, `Service.qml`, `TalkToMeModel.js` and a `shell.qml` containing `ShellRoot { Service {} }`; run `quickshell -n -p <folder>`; talk to it with `TALK_TO_ME_QS_PATH=<folder> bin/talk-to-me ...`.
 - `omarchy plugin validate .`
 

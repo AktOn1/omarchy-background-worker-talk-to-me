@@ -2,10 +2,11 @@
 name: background-worker-talk-to-me
 description: >
   Use when a task changes anything visible on the Omarchy/Hyprland desktop: moving or
-  resizing windows, workspaces, the bar, animations, window rules, overlays, themes.
+  resizing windows, workspaces, the bar, animations, window rules, overlays, themes,
+  and before using heavy hardware (a big CPU/RAM job, a VM with lots of resources, the GPU).
   Wraps the work in `talk-to-me start` / `talk-to-me ask` / `talk-to-me end` so the human confirms the
   visual result with one key press. Triggers: talk-to-me, human test mode, "does it look right",
-  window moves, workspace switch, bar change, Hyprland rule test.
+  window moves, workspace switch, bar change, Hyprland rule test, talk-to-me need, announce hardware, GPU, VM.
 ---
 
 # Background Worker Talk To Me
@@ -18,6 +19,14 @@ Before anything else, check whether the test can run in a virtual machine (or a 
 
 `command -v talk-to-me` . If missing, do the task without it and state in your report that the
 visual result was not human-confirmed.
+
+## Announce heavy hardware
+Before you use something the human can feel, announce it: `talk-to-me need cpu|vm|gpu "<who, what exactly, why>" --estimate 10m`.
+- `cpu`: more than 8 GB RAM, or 8+ threads busy for 2+ minutes (big builds, encodes, test suites).
+- `vm`: a VM with more than 4 GB RAM, or any VM test run (`vm-test`, qemu).
+- `gpu`: more than 2 GB VRAM, or load for 2+ minutes (image, voice or LLM models, GPU video encodes).
+- The screen, keyboard or mouse is `talk-to-me start` (below).
+`need` prints `granted` when you may go ahead; with the queue on it waits for a free slot first (`timeout`, exit 7, or `cancelled`, exit 4: do other work, retry later). Run the heavy command after `granted`, then `talk-to-me release cpu|vm|gpu`. An announcement expires by itself after the longest hold (60 min by default). `talk-to-me hardware` lists who holds what and the thresholds. If the human turned enforcement on, the guard hook blocks known heavy commands (`ollama run`, `vm-test`, `stress-ng`, big encodes) until you have announced.
 
 ## Procedure
 1. `talk-to-me start "<full title>" --estimate 3m` (the title is the only thing the human reads and is shown in full, max 240 characters: one sentence with who you are, exactly what you test or do, and for which project or reason; "Desktop testing"/"demo" are refused with exit 2) before the first visible change (always give an honest `--estimate`: `90s`, `3m` or minutes; the card shows it, the banner counts it down and says "taking longer" when you overrun; revise with `talk-to-me eta 2m`) (10 s countdown, a heads-up only: the

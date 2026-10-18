@@ -3,7 +3,7 @@ const assert = require("assert")
 const fs = require("fs")
 const path = require("path")
 const src = fs.readFileSync(path.join(__dirname, "..", "TalkToMeModel.js"), "utf8").replace(/^\.pragma library\n/, "")
-const M = new Function(src + "; return { cleanId, clampInt, cleanText, keyAction, askKind, textResult, postponeResult, remainingText, estimateLabel, progressText, timeLine, badgeRing, statusJson, cleanKind, guardUntil, DEFAULTS }")()
+const M = new Function(src + "; return { cleanId, clampInt, cleanText, keyAction, askKind, textResult, postponeResult, remainingText, estimateLabel, progressText, timeLine, badgeRing, statusJson, cleanKind, guardUntil, hwKindLabel, hwParse, hwView, DEFAULTS }")()
 
 assert.strictEqual(M.cleanId("abc123_-Z"), "abc123_-Z")
 assert.strictEqual(M.cleanId("../etc"), "")
@@ -87,3 +87,27 @@ assert.strictEqual(M.cleanKind(undefined), "test")
 assert.strictEqual(M.cleanKind("x"), "test")
 assert.strictEqual(JSON.parse(M.statusJson({ phase: "active", kind: "work" })).kind, "work")
 assert.strictEqual(JSON.parse(M.statusJson({ phase: "active" })).kind, "test")
+
+// hardware pills
+assert.strictEqual(M.hwKindLabel("gpu"), "GPU")
+assert.strictEqual(M.hwKindLabel("screen"), "")
+assert.deepStrictEqual(M.hwParse("not json"), [])
+assert.deepStrictEqual(M.hwParse('{"entries":5}'), [])
+const hwNow = 1000
+const hwEntries = [
+  { id: "gpu2", seq: 2, kind: "gpu", title: "Codex:  voice\nsamples", state: "queued", started: 0, until: 0, estimate: 60 },
+  { id: "gpu1", seq: 1, kind: "gpu", title: "Claude: render", state: "active", started: 940, until: 4540, estimate: 300 },
+  { id: "vm3", seq: 3, kind: "vm", title: "old", state: "active", started: 0, until: 900, estimate: 0 },
+  { id: "x4", seq: 4, kind: "screen", title: "bogus", state: "active", started: 0, until: 5000, estimate: 0 },
+  { id: "gpu5", seq: 5, kind: "gpu", title: "Gemini: later", state: "queued", started: 0, until: 0, estimate: 0 }
+]
+const hwPills = M.hwView(hwEntries, hwNow)
+assert.deepStrictEqual(hwPills.map(p => p.id), ["gpu1", "gpu2", "gpu5"])
+assert.strictEqual(hwPills[0].line, "about 4:00 left")
+assert.strictEqual(hwPills[0].label, "GPU")
+assert.strictEqual(hwPills[1].title, "Codex: voice samples")
+assert.strictEqual(hwPills[1].position, 1)
+assert.strictEqual(hwPills[2].position, 2)
+assert.strictEqual(hwPills[2].line, "waiting, number 2 in line")
+assert.deepStrictEqual(M.hwView(null, hwNow), [])
+console.log("hardware tests ok")

@@ -121,3 +121,43 @@ function statusJson(st) {
     elapsedSec: st.elapsedSec || 0
   })
 }
+
+// ---- hardware announcements (talk-to-me need cpu|vm|gpu) ----
+
+var HW_KINDS = { cpu: "CPU / RAM", vm: "VM", gpu: "GPU" }
+
+function hwKindLabel(kind) {
+  return HW_KINDS[kind] || ""
+}
+
+// Parses the state file written by bin/talk-to-me-hw; [] for anything unusable.
+function hwParse(raw) {
+  try {
+    var st = JSON.parse(String(raw || ""))
+    return Array.isArray(st.entries) ? st.entries : []
+  } catch (e) {
+    return []
+  }
+}
+
+// Pills to draw, longest-held first, active before queued within a kind. Expired entries are dropped here too, so the
+// banner is right between two calls of the helper. Queue positions count per kind.
+function hwView(entries, nowSec) {
+  var out = [], queuedSeen = {}
+  var list = (entries || []).filter(function (e) { return e && hwKindLabel(e.kind) !== "" })
+  list.sort(function (a, b) { return (a.state === "queued") - (b.state === "queued") || a.seq - b.seq })
+  list.forEach(function (e) {
+    var title = cleanText(e.title, DEFAULTS.labelMax)
+    if (e.state === "active") {
+      if (!(e.until > nowSec)) return
+      var elapsed = Math.max(0, nowSec - e.started)
+      out.push({ id: String(e.id), kind: e.kind, label: hwKindLabel(e.kind), title: title, queued: false, position: 0,
+                 line: progressText(e.estimate || 0, elapsed), ring: badgeRing(e.estimate || 0, elapsed) })
+    } else if (e.state === "queued") {
+      queuedSeen[e.kind] = (queuedSeen[e.kind] || 0) + 1
+      out.push({ id: String(e.id), kind: e.kind, label: hwKindLabel(e.kind), title: title, queued: true, position: queuedSeen[e.kind],
+                 line: "waiting, number " + queuedSeen[e.kind] + " in line", ring: { text: "#" + queuedSeen[e.kind], fraction: 0 } })
+    }
+  })
+  return out
+}

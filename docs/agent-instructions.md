@@ -7,6 +7,15 @@ For Claude Code there is also a ready-made skill, see [skill/background-worker-t
 ---
 
 ```markdown
+## Announce the hardware you need (Background Worker Talk To Me)
+
+Whenever you are about to use something the human feels, say so first, so they see it as a pill on their screen and can wait, queue or stop you:
+- the **screen, keyboard or mouse**: `talk-to-me start "<full title>" --estimate 3m` (see below);
+- a **heavy CPU/RAM job** (more than 8 GB RAM, or 8+ threads busy for 2+ minutes: big builds, encodes, test suites): `talk-to-me need cpu "<what and why>" --estimate 10m`;
+- a **VM with lots of resources** (more than 4 GB RAM, or any VM test run): `talk-to-me need vm "<what and why>" --estimate 5m`;
+- **heavy GPU use** (more than 2 GB VRAM, or load for 2+ minutes: image, voice or LLM models, GPU video encodes): `talk-to-me need gpu "<what and why>" --estimate 10m`.
+`need` prints `granted` when you may go ahead. If the human turned the queue on and someone else holds that resource it waits in line and prints `granted` when it is your turn (or `timeout`, exit 7, or `cancelled`, exit 4: do other work and retry later). Run the heavy command only after `granted`, and release it when done: `talk-to-me release cpu|vm|gpu` (it also expires by itself after the longest hold, 60 minutes by default). `talk-to-me hardware` shows who holds what and the current thresholds. The title is shown in full, like the session title: who you are, what exactly, why.
+
 ## Desktop testing with human feedback (Background Worker Talk To Me)
 
 Before anything else, check whether the test can run in a virtual machine (or a nested compositor) instead of on the human's real desktop. If it does not need their real logins, GPU or monitors, run it there: no session, no banner, no risk. Only start a session for what truly needs the real desktop.

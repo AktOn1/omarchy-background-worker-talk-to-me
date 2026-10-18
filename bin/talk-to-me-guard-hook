@@ -7,7 +7,7 @@
 # HYPRLAND_INSTANCE_SIGNATURE / WAYLAND_DISPLAY), at a HEADLESS-n virtual monitor, or marked TALK_TO_ME_ISOLATED=1
 # cannot be disturbed by the user's keyboard or mouse and cannot disturb their work.
 #   talk-to-me-guard-hook --shim NAME ARGS...   exit 0 when that call is isolated (used by talk-to-me-guard)
-import json, os, re, subprocess, sys
+import json, os, re, subprocess, sys, time
 
 if os.environ.get("TALK_TO_ME_GUARD_OFF"):
     sys.exit(0)
@@ -94,6 +94,61 @@ if tool in ASK_TOOLS:
 
 if not cmd or tool not in SHELL_TOOLS:
     sys.exit(0)
+
+def conf(key, default):
+    try:
+        cfg = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "background-worker-talk-to-me")
+        for line in open(os.path.join(cfg, "settings.conf")):
+            if line.startswith(key + "="):
+                return line.split("=", 1)[1].strip() or default
+    except OSError:
+        pass
+    return default
+
+def hw_announced(kind):
+    """True when an agent has an active (not expired) announcement for this hardware kind."""
+    try:
+        st = json.load(open(os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid(), "talk-to-me", "hw", "state.json")))
+        return any(e.get("kind") == kind and e.get("state") == "active" and e.get("until", 0) > time.time() for e in st.get("entries", []))
+    except Exception:
+        return False
+
+# commands that use a lot of hardware (checked only when the hw-enforce setting is on); add your own in hw-commands: "gpu: my-render-tool"
+def hw_patterns():
+    pre_ = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:su[d]o|env|exec|command|nohup|setsid|time)\s+|\w+=\S*\s+)*(?:\S*/)?'
+    pats = {
+        "gpu": [pre_ + r'(?:ollama\s+(?:run|serve)|llama-(?:cli|server|bench)|whisper(?:-cli)?|faster-whisper)(?:\s|$|;|&|\|)',
+                r'comfyui\S*/main\.py', r'(?:localhost|127\.0\.0\.1):8188/(?:api/)?prompt'],
+        "vm": [pre_ + r'(?:vm-test(?:-all)?|qemu-system-\S+|virt-install|quickemu|omarchy-vm\s+start|virsh\s+start)(?:\s|$|;|&|\|)'],
+        "cpu": [pre_ + r'stress-ng(?:\s|$|;|&|\|)', r'ffmpeg\b.*-c:v\s+lib(?:x264|x265|svtav1|aom)', r'\bmake\b(?:\s+\S+)*\s-j\s*(?:[89]|\d{2,})\b'],
+    }
+    try:
+        cfg = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "background-worker-talk-to-me", "hw-commands")
+        for l in open(cfg):
+            l = l.split("#")[0].strip()
+            kind, _, name = l.partition(":")
+            if kind.strip() in pats and name.strip():
+                pats[kind.strip()].append(pre_ + re.escape(name.strip()) + r'(?:\s|$|;|&|\|)')
+    except OSError:
+        pass
+    return pats
+
+def hw_enforce(cmd):
+    if conf("hw-enforce", "off") != "on" or re.search(r'--help|--version|\s-h(?:\s|$)', cmd):
+        return
+    for kind, pats in hw_patterns().items():
+        if conf("hw-" + kind, "on") == "off" or hw_announced(kind):
+            continue
+        if any(re.search(p, cmd, re.M | re.I) for p in pats):
+            what = {"gpu": "heavy GPU use", "vm": "a VM with a lot of resources", "cpu": "a heavy CPU/RAM job"}[kind]
+            sys.stderr.write(
+                "Blocked: this command needs %s and you have not announced it. The person (and other agents) must know before you take that hardware.\n"
+                'Run:  talk-to-me need %s "<your name>: <what runs, for which project or reason>" --estimate 10m\n'
+                "(prints granted; with the queue on it waits for your turn first). Then repeat this command, and when it is finished:  talk-to-me release %s\n"
+                "What counts as heavy on this machine:  talk-to-me hardware rules.   The person can turn this check off: talk-to-me settings set hw-enforce off\n" % (what, kind, kind))
+            sys.exit(2)
+
+hw_enforce(cmd) if cmd and tool in SHELL_TOOLS else None
 
 # a desktop-touching tool in command position (start, or after ; & | ( ` $( { and command prefixes like env/exec/assignments)
 pre = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:su[d]o|env|exec|command|nohup|setsid|time)\s+|\w+=\S*\s+)*(?:\S*/)?'
