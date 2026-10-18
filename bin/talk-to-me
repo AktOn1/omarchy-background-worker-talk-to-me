@@ -63,6 +63,7 @@ talk-to-me: Background Worker Talk To Me
       Show or change the settings (stored in ~/.config/background-worker-talk-to-me/settings.conf).
         questions         on|off   allow "talk-to-me question" (default off, experimental)
         watch             on|off   agent watcher: banner when any agent opens a window with no session (default on)
+        watch-hold        on|off   hide a window an agent opened without a session on a special workspace until it announces itself (default on)
         shield            on|off   invisible mouse shield over every screen during solo tests (default on)
         hide              on|off   switch every screen to an empty workspace while the agent works (default on)
         notice-seconds    SEC      how long that notice stays (default 12, 3-120)
@@ -147,12 +148,13 @@ call() {
 }
 
 CONF_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/background-worker-talk-to-me/settings.conf"
-SETTING_KEYS="questions watch shield hide notice-seconds question-timeout question-gap countdown max ask-timeout text-timeout"
+SETTING_KEYS="questions watch watch-hold shield hide notice-seconds question-timeout question-gap countdown max ask-timeout text-timeout"
 
 setting_default() {
   case $1 in
     questions) echo off ;;
     watch) echo on ;;
+    watch-hold) echo on ;;
     shield) echo on ;;
     hide) echo on ;;
     notice-seconds) echo 12 ;;
@@ -184,7 +186,7 @@ setting_get() {
     value=${line#*=}
   fi
   if [[ -z $value ]]; then setting_default "$key"; return; fi
-  if [[ $key == questions || $key == watch || $key == shield || $key == hide ]]; then
+  if [[ $key == questions || $key == watch || $key == watch-hold || $key == shield || $key == hide ]]; then
     case $value in on|off) echo "$value" ;; *) setting_default "$key" ;; esac
   elif [[ $value =~ ^[0-9]+$ ]]; then echo "$value"
   else setting_default "$key"; fi
@@ -194,7 +196,7 @@ setting_valid_key() { [[ " $SETTING_KEYS " == *" $1 "* ]]; }
 
 setting_validate() {
   local key=$1 value=$2 lo hi
-  if [[ $key == questions || $key == watch || $key == shield || $key == hide ]]; then
+  if [[ $key == questions || $key == watch || $key == watch-hold || $key == shield || $key == hide ]]; then
     [[ $value == on || $value == off ]] || die "$key takes on or off"
     return
   fi

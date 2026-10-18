@@ -95,3 +95,18 @@ grim "$VM_TEST_OUT/paused-countdown.png"
 echo "paused countdown: bar $bw x $bh at x=$bx -> $aw x $ah at x=$ax (right edge $((ax + aw)) of $mon_w)"
 wtype -M ctrl -k q -m ctrl; wait
 "$T" end --quiet >/dev/null 2>&1
+# a window an agent opens with no session is held out of sight, and comes back once the agent announces itself
+"$T" end --quiet >/dev/null 2>&1
+pkill -x foot; sleep 1
+AI_AGENT=vm-check setsid nohup foot >/dev/null 2>&1 </dev/null &
+sleep 4
+held=$(hyprctl -j clients | jq -r '[.[] | select(.class=="foot")][0].workspace.name')
+grim "$VM_TEST_OUT/agent-window-held.png"
+[[ $held == special:talk-to-me-held ]] || fail "unannounced agent window not held (on $held)"
+TALK_TO_ME_ALLOW_SHORT_TITLE=1 "$T" start "vm check 8" --countdown 1 --no-hide >/dev/null || fail "start after held window"
+sleep 7
+back=$(hyprctl -j clients | jq -r '[.[] | select(.class=="foot")][0].workspace.name')
+"$T" end --quiet >/dev/null 2>&1
+pkill -x foot
+[[ $back != special:* ]] || fail "held window not released when the session started (on $back)"
+echo "agent window with no session: held on $held, released to workspace $back at talk-to-me start"

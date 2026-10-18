@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # talk-to-me-watch: agent-independent watcher, started by the plugin. It listens to Hyprland's event socket and,
 # when a window opens that belongs to an AI agent run (any agent: the process or one of its parents is a known agent,
-# or its environment carries an agent marker) while no talk-to-me session is active, shows the "AGENT ACTIVITY"
-# banner so the user keeps hands off. No hook, PATH order or agent support needed.
+# or its environment carries an agent marker) while no talk-to-me session is active, it holds the window out of sight
+# on a special workspace (setting watch-hold, default on) and shows the "AGENT ACTIVITY" banner. A window on the
+# user's screen is already taking it over, so it only comes back once the agent has announced itself with
+# talk-to-me start (or the user runs --release). No hook, PATH order or agent support needed.
 #   talk-to-me-watch              run the watcher (the plugin does this)
+#   talk-to-me-watch --release    bring every held window back to the focused workspace, then exit
 #   talk-to-me-watch --check PID  print which agent (if any) PID belongs to, then exit 0 (agent) or 1 (none)
 # Extra agent names: one per line in ~/.config/background-worker-talk-to-me/agent-processes.
 import json, os, socket, subprocess, sys, time
@@ -123,6 +126,42 @@ def log(line):
         pass
 
 
+HELD = "special:talk-to-me-held"
+held = set()
+
+
+def lua_move(address, ws):
+    return "hl.dispatch(hl.dsp.window.move({ window = %s, workspace = %s, follow = false }))" % (
+        json.dumps("address:0x" + address.removeprefix("0x")), json.dumps(ws))
+
+
+def hold(address):
+    subprocess.run(["hyprctl", "eval", lua_move(address, HELD)], capture_output=True, timeout=5)
+    held.add(address.removeprefix("0x"))
+
+
+def release_held():
+    """Move held windows that still exist to the workspace the user is looking at."""
+    if not held:
+        return
+    try:
+        clients = json.loads(subprocess.run(["hyprctl", "-j", "clients"], capture_output=True, text=True, timeout=5).stdout)
+        mons = json.loads(subprocess.run(["hyprctl", "-j", "monitors"], capture_output=True, text=True, timeout=5).stdout)
+    except Exception:
+        return
+    focused = next((m for m in mons if m.get("focused")), mons[0] if mons else None)
+    if not focused:
+        return
+    ws = focused["activeWorkspace"]
+    target = str(ws["id"]) if ws["id"] > 0 else "name:" + ws["name"]
+    alive = {c.get("address", "").removeprefix("0x") for c in clients if c.get("workspace", {}).get("name") == HELD}
+    cmds = [lua_move(a, target) for a in held if a in alive]
+    if cmds:
+        subprocess.run(["hyprctl", "eval", "\n".join(cmds)], capture_output=True, timeout=5)
+        log("released %d held window(s) to %s" % (len(cmds), target))
+    held.clear()
+
+
 def handle_open(payload, names):
     parts = payload.split(",", 3)
     if len(parts) < 3 or setting("watch", "on") != "on":
@@ -136,9 +175,17 @@ def handle_open(payload, names):
     if session_active():
         return
     cls = cls or parts[2]
-    log("window %s opened by agent %s (pid %d), no session" % (cls, agent, pid))
+    holding = setting("watch-hold", "on") == "on"
+    log("window %s opened by agent %s (pid %d), no session%s" % (cls, agent, pid, ", held out of sight" if holding else ""))
+    text = "An agent opened a window. Hands off for a moment."
+    if holding:
+        try:
+            hold(parts[0])
+            text = "An agent opened a window without asking. It is held out of sight until the agent announces itself."
+        except (OSError, subprocess.SubprocessError):
+            pass
     try:
-        subprocess.run([CLI, "notice", "An agent opened a window. Hands off for a moment."], capture_output=True, timeout=5)
+        subprocess.run([CLI, "notice", text], capture_output=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
         pass
 
@@ -163,6 +210,14 @@ def main():
         agent = agent_of(int(sys.argv[2]), names)
         print(agent)
         sys.exit(0 if agent else 1)
+    if len(sys.argv) == 2 and sys.argv[1] == "--release":
+        try:
+            clients = json.loads(subprocess.run(["hyprctl", "-j", "clients"], capture_output=True, text=True, timeout=5).stdout)
+        except Exception:
+            sys.exit(1)
+        held.update(c["address"].removeprefix("0x") for c in clients if c.get("workspace", {}).get("name") == HELD)
+        release_held()
+        sys.exit(0)
     sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
     runtime = os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()
     path = os.path.join(runtime, "hypr", sig, ".socket2.sock")
@@ -180,6 +235,8 @@ def main():
         try:
             chunk = s.recv(65536)
         except socket.timeout:
+            if held and session_active():
+                release_held()
             continue
         if not chunk:
             return
@@ -189,6 +246,10 @@ def main():
             event, _, payload = raw.decode(errors="replace").partition(">>")
             if event == "openwindow":
                 handle_open(payload, names)
+            elif event == "closewindow":
+                held.discard(payload.strip().removeprefix("0x"))
+        if held and session_active():
+            release_held()
 
 
 if __name__ == "__main__":
