@@ -98,8 +98,8 @@ if not cmd or tool not in SHELL_TOOLS:
 # a desktop-touching tool in command position (start, or after ; & | ( ` $( { and command prefixes like env/exec/assignments)
 pre = r'(?:^|[;&|(`{]|\$\()\s*(?:(?:su[d]o|env|exec|command|nohup|setsid|time)\s+|\w+=\S*\s+)*(?:\S*/)?'
 touch = re.compile(pre + r'(?:wtype|ydotool|dotool|dotoolc|omarchy-restart-shell|hyprctl\s+(?:-\S+\s+)*(?:dispatch|reload|keyword))(?:\s|$|;|&|\|)', re.M)
-# windowed launches: Godot binaries and play.sh (unless headless), xdg-open, gtk-launch, omarchy-launch-*
-win = re.compile(pre + r'(?:(?:\S*godot\S*|xdg-open|gtk-launch|omarchy-launch-\S+)|[\w./-]*play\.sh)(?:\s|$|;|&|\|)', re.M | re.I)
+# windowed launches: Godot binaries and play.sh (unless headless), xdg-open, gtk-launch, omarchy-launch-*, Wine/Proton/XIVLauncher/Lutris
+win = re.compile(pre + r'(?:(?:\S*godot\S*|xdg-open|gtk-launch|omarchy-launch-\S+|wine\w*|proton\w*|umu-run|xivlauncher\S*|lutris|heroic|bottles)|[\w./-]*play\.sh)(?:\s|$|;|&|\|)', re.M | re.I)
 # user-added launchers: one command name per line in guard-commands (# comments allowed)
 extra = []
 try:
