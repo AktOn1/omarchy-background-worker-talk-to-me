@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+# talk-to-me-hw: bookkeeping for "an agent needs hardware" (heavy CPU/RAM, a big VM, the GPU).
+# State is one small JSON file in $XDG_RUNTIME_DIR/talk-to-me/hw/ guarded by flock, so any number of agents can
+# call it at the same time. The shell plugin only reads state.json to draw the banner pills; nothing here talks to it.
+#
+#   need    --kind K --title T [--estimate S] [--max MIN] [--slots N] [--queue 0|1] [--owner O] [--pid P]
+#           prints ID<TAB>active|queued<TAB>queue position<TAB>titles of the current holders
+#   poll    ID [--slots N]       prints active|queued|gone<TAB>queue position
+#   release (--id ID | --kind K | --all) [--owner O]
+#   list
+#   check   KIND                      exit 0 when KIND is announced (active entry), 1 otherwise
+import argparse, fcntl, json, os, sys, time
+
+KINDS = ("cpu", "vm", "gpu")
+RUNTIME = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid(), "talk-to-me", "hw")
+STATE = os.path.join(RUNTIME, "state.json")
+LOCK = os.path.join(RUNTIME, "lock")
+
+
+class Locked:
+    def __enter__(self):
+        os.makedirs(RUNTIME, mode=0o700, exist_ok=True)
+        self.fd = os.open(LOCK, os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(self.fd, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *a):
+        os.close(self.fd)
+
+
+def load():
+    try:
+        with open(STATE) as f:
+            st = json.load(f)
+        if not isinstance(st.get("entries"), list):
+            raise ValueError
+        return st
+    except (OSError, ValueError):
+        return {"seq": 0, "slots": 1, "entries": []}
+
+
+def save(st):
+    tmp = STATE + ".tmp%d" % os.getpid()
+    with open(tmp, "w") as f:
+        json.dump(st, f, separators=(",", ":"))
+    os.replace(tmp, STATE)
+
+
+def alive(pid):
+    if not pid:
+        return True
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def settle(st, now):
+    """Drop expired and abandoned entries, then let queued ones take free slots (oldest first)."""
+    keep = []
+    for e in st["entries"]:
+        if e["state"] == "active" and e["until"] <= now:
+            continue
+        if e["state"] == "queued" and not alive(e.get("pid", 0)):
+            continue
+        keep.append(e)
+    st["entries"] = keep
+    slots = max(1, int(st.get("slots", 1)))
+    for kind in KINDS:
+        active = sum(1 for e in keep if e["kind"] == kind and e["state"] == "active")
+        for e in sorted((e for e in keep if e["kind"] == kind and e["state"] == "queued"), key=lambda e: e["seq"]):
+            if active >= slots:
+                break
+            e["state"] = "active"
+            e["started"] = now
+            e["until"] = now + e["max"]
+            active += 1
+
+
+def position(st, entry):
+    queued = sorted((e for e in st["entries"] if e["kind"] == entry["kind"] and e["state"] == "queued"), key=lambda e: e["seq"])
+    return queued.index(entry) + 1 if entry in queued else 0
+
+
+def clean(text, limit):
+    return " ".join(str(text).split())[:limit]
+
+
+def cmd_need(a):
+    now = int(time.time())
+    with Locked():
+        st = load()
+        st["slots"] = max(1, min(8, a.slots))
+        settle(st, now)
+        # the same owner announcing the same kind again renews its entry instead of piling up
+        for e in st["entries"]:
+            if e["kind"] == a.kind and e["owner"] == a.owner and a.owner != "-" and e["state"] == "active":
+                e["title"] = clean(a.title, 240)
+                e["estimate"] = a.estimate
+                e["started"] = now
+                e["until"] = now + a.max * 60
+                save(st)
+                print("\t".join([e["id"], "active", "0", ""]))
+                return
+        st["seq"] = int(st.get("seq", 0)) + 1
+        holders = [e["title"] for e in st["entries"] if e["kind"] == a.kind and e["state"] == "active"]
+        entry = {
+            "id": "%s%d" % (a.kind, st["seq"]), "seq": st["seq"], "kind": a.kind, "title": clean(a.title, 240),
+            "owner": a.owner, "state": "queued", "created": now, "started": 0, "until": 0,
+            "estimate": a.estimate, "max": a.max * 60, "pid": a.pid,
+        }
+        if not a.queue or len(holders) < st["slots"]:
+            entry.update(state="active", started=now, until=now + entry["max"], pid=0)
+        st["entries"].append(entry)
+        settle(st, now)
+        save(st)
+        print("\t".join([entry["id"], entry["state"], str(position(st, entry)), " | ".join(holders)]))
+
+
+def cmd_poll(a):
+    now = int(time.time())
+    with Locked():
+        st = load()
+        if a.slots:
+            st["slots"] = max(1, min(8, a.slots))
+        settle(st, now)
+        save(st)
+        for e in st["entries"]:
+            if e["id"] == a.id:
+                print("%s\t%d" % (e["state"], position(st, e)))
+                return
+    print("gone\t0")
+
+
+def cmd_release(a):
+    now = int(time.time())
+    with Locked():
+        st = load()
+        before = len(st["entries"])
+        def hit(e):
+            if a.id:
+                return e["id"] == a.id
+            if a.owner and a.owner != "-" and e["owner"] != a.owner:
+                return False
+            return a.all or e["kind"] == a.kind
+        st["entries"] = [e for e in st["entries"] if not hit(e)]
+        settle(st, now)
+        save(st)
+        print(before - len(st["entries"]) if before else 0)
+
+
+def cmd_list(a):
+    now = int(time.time())
+    with Locked():
+        st = load()
+        settle(st, now)
+        save(st)
+    print(json.dumps({"now": now, "slots": st.get("slots", 1), "entries": st["entries"]}))
+
+
+def cmd_check(a):
+    now = time.time()
+    try:
+        st = load()
+    except Exception:
+        sys.exit(1)
+    sys.exit(0 if any(e["kind"] == a.kind and e["state"] == "active" and e["until"] > now for e in st["entries"]) else 1)
+
+
+def main():
+    p = argparse.ArgumentParser(prog="talk-to-me-hw")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    n = sub.add_parser("need")
+    n.add_argument("--kind", required=True, choices=KINDS)
+    n.add_argument("--title", required=True)
+    n.add_argument("--estimate", type=int, default=0)
+    n.add_argument("--max", type=int, default=60)
+    n.add_argument("--slots", type=int, default=1)
+    n.add_argument("--queue", type=int, default=0)
+    n.add_argument("--owner", default="-")
+    n.add_argument("--pid", type=int, default=0)
+    n.set_defaults(fn=cmd_need)
+    q = sub.add_parser("poll")
+    q.add_argument("id")
+    q.add_argument("--slots", type=int, default=0)
+    q.set_defaults(fn=cmd_poll)
+    r = sub.add_parser("release")
+    g = r.add_mutually_exclusive_group(required=True)
+    g.add_argument("--id")
+    g.add_argument("--kind", choices=KINDS)
+    g.add_argument("--all", action="store_true")
+    r.add_argument("--owner", default="")
+    r.set_defaults(fn=cmd_release)
+    sub.add_parser("list").set_defaults(fn=cmd_list)
+    c = sub.add_parser("check")
+    c.add_argument("kind", choices=KINDS)
+    c.set_defaults(fn=cmd_check)
+    a = p.parse_args()
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()

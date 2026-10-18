@@ -110,3 +110,35 @@ back=$(hyprctl -j clients | jq -r '[.[] | select(.class=="foot")][0].workspace.n
 pkill -x foot
 [[ $back != special:* ]] || fail "held window not released when the session started (on $back)"
 echo "agent window with no session: held on $held, released to workspace $back at talk-to-me start"
+# hardware announcements: a pill per holder, a queued one when hw-queue is on, gone after release
+hwlayers() { hyprctl -j layers | jq '[.. | objects | select(.namespace? == "background-worker-talk-to-me-hardware")] | length'; }
+"$T" settings set hw-queue off >/dev/null
+"$T" release all >/dev/null 2>&1
+[[ $(TALK_TO_ME_ALLOW_SHORT_TITLE=1 "$T" need gpu "vm check: image model" --estimate 5m) == granted ]] || fail "need gpu not granted"
+sleep 2.5
+(( $(hwlayers) >= 1 )) || fail "no hardware pill window after need gpu"
+grim "$VM_TEST_OUT/hardware-pill.png"
+"$T" hardware | jq -e '.entries | length == 1' >/dev/null || fail "hardware list is not one entry"
+"$T" settings set hw-queue on >/dev/null
+( TALK_TO_ME_ALLOW_SHORT_TITLE=1 "$T" need gpu "vm check: second job" --estimate 1m >/tmp/ttm-hw2 2>&1 ) &
+sleep 3.5
+grep -q queued <("$T" hardware) || fail "second gpu job is not queued"
+grim "$VM_TEST_OUT/hardware-queue.png"
+"$T" release --id "$("$T" hardware | jq -r '.entries[] | select(.state == "active") | .id')" >/dev/null
+wait
+grep -qx granted /tmp/ttm-hw2 || fail "queued job not granted after release: $(cat /tmp/ttm-hw2)"
+"$T" release all >/dev/null
+sleep 2.5
+(( $(hwlayers) == 0 )) || fail "hardware pill window still there after release"
+"$T" settings set hw-queue off >/dev/null
+echo "hardware: pill shown, second job queued then granted, pills gone after release"
+# bar icon: the popup lists the holders and holds the settings
+"$T" release all >/dev/null 2>&1
+TALK_TO_ME_ALLOW_SHORT_TITLE=1 "$T" need vm "vm check: big test machine" --estimate 5m >/dev/null
+omarchy-shell io.github.akton1.background-worker-talk-to-me.menu open >/dev/null 2>&1 || fail "bar menu IPC target missing"
+sleep 2.5
+grim "$VM_TEST_OUT/bar-menu.png"
+hyprctl layers | grep -q 'background-worker-talk-to-me' || fail "no plugin layers while the menu is open"
+omarchy-shell io.github.akton1.background-worker-talk-to-me.menu close >/dev/null 2>&1
+"$T" release all >/dev/null
+echo "bar menu: opened over IPC (screenshot bar-menu.png)"

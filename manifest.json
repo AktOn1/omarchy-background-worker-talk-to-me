@@ -2,15 +2,24 @@
   "schemaVersion": 1,
   "id": "io.github.akton1.background-worker-talk-to-me",
   "name": "Background Worker Talk To Me",
-  "version": "0.3.8",
+  "version": "0.4.1",
   "author": "AktOn1",
   "license": "MIT",
-  "description": "Lets an AI agent that tests on your desktop tell you first and ask you quick questions. A heads-up countdown (pause, postpone or cancel), a TESTING badge with the expected time, Ctrl-key answers (Ctrl+Y, Ctrl+N, Ctrl+/) or a typed reply returned to the command line, and a guard that makes agents announce themselves before they touch your windows.",
+  "description": "Lets an AI agent that works on your desktop tell you first. Agents announce the hardware they need (the screen, heavy CPU/RAM, a big VM, the GPU) and a banner shows who uses what, with an optional queue. Also: a heads-up countdown (pause, postpone or cancel), a TESTING badge with the expected time, Ctrl-key answers or a typed reply returned to the command line, a guard that makes agents announce themselves, and a bar icon with all the settings.",
   "kinds": [
-    "service"
+    "service",
+    "bar-widget"
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "service": "Service.qml"
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Talk To Me",
+    "description": "Who is using the screen, the CPU/RAM, a VM or the GPU right now, who waits in line, and every setting of the plugin.",
+    "category": "Utilities",
+    "allowMultiple": false,
+    "defaultSection": "right"
   }
 }

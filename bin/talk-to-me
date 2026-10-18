@@ -7,6 +7,9 @@
 #        talk-to-me eta DUR       (revise the expected remaining time: 90s, 3m or 3 = minutes)
 #        talk-to-me notice "TEXT" [--seconds N]   (banner without a session; the agent watcher uses it)
 #        talk-to-me end [--quiet]   (a green checkmark card says the work is done; --quiet or --failed skips it)
+#        talk-to-me need cpu|vm|gpu TITLE [--estimate DUR] [--max MIN] [--wait SEC]   -> granted | timeout | cancelled   (hardware announcement; screen = talk-to-me start)
+#        talk-to-me release [cpu|vm|gpu|all] [--id ID]
+#        talk-to-me hardware [rules]
 #        talk-to-me status
 #        talk-to-me require [WHAT]    -> exit 0 ok, 99 = agent run with no active session (put it in launcher scripts)
 set -u
@@ -73,6 +76,17 @@ talk-to-me: Background Worker Talk To Me
         max               MIN      default session limit (default 20, 1-240)
         ask-timeout       SEC      default for talk-to-me ask (default 60, 3-600)
         text-timeout      SEC      default for talk-to-me ask --text (default 120, 3-600)
+        hw-cpu|hw-vm|hw-gpu  on|off  announce that hardware kind with talk-to-me need (default on; off = need returns at once, no pill)
+        hw-queue          on|off   agents wait their turn for a kind: hw-slots holders at a time (default off = banner only)
+        hw-slots          N        how many agents may hold one kind at once when the queue is on (default 1, 1-4)
+        hw-enforce        on|off   the guard blocks heavy commands (vm-test, ComfyUI jobs, ollama, ...) until the kind is announced (default off)
+        hw-max            MIN      an announcement expires after this long if the agent forgets to release (default 60, 1-480)
+        hw-wait           SEC      how long talk-to-me need waits in the queue (default 900, 10-3600)
+        hw-gpu-vram       GB       "heavy GPU use" = more than this much VRAM, or hw-minutes of load (default 2)
+        hw-vm-ram         GB       "a VM with lots of resources" = more than this much RAM (default 4)
+        hw-cpu-ram        GB       "heavy CPU/RAM job" = more than this much RAM, or hw-minutes of full load on hw-cpu-threads (default 8)
+        hw-cpu-threads    N        threads kept busy (default 8)
+        hw-minutes        MIN      how long a job runs before it counts as heavy (default 2)
       Command-line options (--countdown, --max, --timeout) still win over settings.
   talk-to-me say "TEXT"      Short status line on the banner (no answer needed).
   talk-to-me eta DUR         Revise the expected remaining time while a test runs (same units as --estimate).
@@ -83,6 +97,17 @@ talk-to-me: Background Worker Talk To Me
       (the person sees the work is finished and the desktop is theirs again). Use --quiet (or --failed) when the test failed or you
       ended it only to clean up, so no success is shown.
   talk-to-me status          Print the session state as JSON.
+  talk-to-me need cpu|vm|gpu "TITLE" [--estimate DUR] [--max MIN] [--wait SEC]
+      Announce that you need heavy hardware BEFORE you use it: cpu = a heavy CPU/RAM job, vm = a VM with a lot of resources,
+      gpu = heavy GPU use. (A screen, keyboard or mouse is talk-to-me start; "need screen ..." is the same command.)
+      TITLE is one full sentence (who you are, what runs, for which project or reason; same rules as start).
+      A pill with your title and a timer shows on the person's screen until you run  talk-to-me release KIND  (or --max
+      minutes pass, default 60). With the queue setting on, only hw-slots agents hold a kind at a time: you wait your turn
+      (up to --wait seconds) and this prints "granted" when it is yours. Prints granted | timeout | cancelled (the person
+      removed you from the queue). Exit codes: 0 granted, 4 cancelled, 7 timeout. Run  talk-to-me hardware rules  to see what counts as heavy.
+  talk-to-me release [cpu|vm|gpu|all] [--id ID]    You are done with that hardware (the pill and your queue slot go away).
+  talk-to-me hardware        JSON: who holds or waits for CPU/RAM, VM and GPU right now.
+  talk-to-me hardware rules  What counts as "a lot of resources" on this machine (the thresholds from the settings).
   talk-to-me require [WHAT]  For launcher scripts that open a window (a game, an app): exits 0 when it is fine
       to go on, 99 (with a message) when an agent run (AI_AGENT, CLAUDECODE, OPENCODE, GEMINI_CLI, CODEX_THREAD_ID, or TALK_TO_ME_GUARD=1 or the agent-env file)
       has no active session. Always 0 for a person at a terminal or with TALK_TO_ME_GUARD_OFF=1.
@@ -148,7 +173,9 @@ call() {
 }
 
 CONF_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/background-worker-talk-to-me/settings.conf"
-SETTING_KEYS="questions watch watch-hold shield hide notice-seconds question-timeout question-gap countdown max ask-timeout text-timeout"
+SETTING_KEYS="questions watch watch-hold shield hide notice-seconds question-timeout question-gap countdown max ask-timeout text-timeout hw-cpu hw-vm hw-gpu hw-queue hw-slots hw-enforce hw-max hw-wait hw-gpu-vram hw-vm-ram hw-cpu-ram hw-cpu-threads hw-minutes"
+
+setting_is_bool() { case $1 in questions|watch|watch-hold|shield|hide|hw-cpu|hw-vm|hw-gpu|hw-queue|hw-enforce) return 0 ;; *) return 1 ;; esac; }
 
 setting_default() {
   case $1 in
@@ -164,6 +191,16 @@ setting_default() {
     max) echo 20 ;;
     ask-timeout) echo 60 ;;
     text-timeout) echo 120 ;;
+    hw-cpu|hw-vm|hw-gpu) echo on ;;
+    hw-queue|hw-enforce) echo off ;;
+    hw-slots) echo 1 ;;
+    hw-max) echo 60 ;;
+    hw-wait) echo 900 ;;
+    hw-gpu-vram) echo 2 ;;
+    hw-vm-ram) echo 4 ;;
+    hw-cpu-ram) echo 8 ;;
+    hw-cpu-threads) echo 8 ;;
+    hw-minutes) echo 2 ;;
     *) return 1 ;;
   esac
 }
@@ -175,6 +212,12 @@ setting_range() {
     question-gap) echo "0 3600" ;;
     countdown) echo "1 30" ;;
     max) echo "1 240" ;;
+    hw-slots) echo "1 4" ;;
+    hw-max) echo "1 480" ;;
+    hw-wait) echo "10 3600" ;;
+    hw-gpu-vram|hw-vm-ram|hw-cpu-ram) echo "1 128" ;;
+    hw-cpu-threads) echo "1 256" ;;
+    hw-minutes) echo "1 60" ;;
   esac
 }
 
@@ -186,7 +229,7 @@ setting_get() {
     value=${line#*=}
   fi
   if [[ -z $value ]]; then setting_default "$key"; return; fi
-  if [[ $key == questions || $key == watch || $key == watch-hold || $key == shield || $key == hide ]]; then
+  if setting_is_bool "$key"; then
     case $value in on|off) echo "$value" ;; *) setting_default "$key" ;; esac
   elif [[ $value =~ ^[0-9]+$ ]]; then echo "$value"
   else setting_default "$key"; fi
@@ -196,7 +239,7 @@ setting_valid_key() { [[ " $SETTING_KEYS " == *" $1 "* ]]; }
 
 setting_validate() {
   local key=$1 value=$2 lo hi
-  if [[ $key == questions || $key == watch || $key == watch-hold || $key == shield || $key == hide ]]; then
+  if setting_is_bool "$key"; then
     [[ $value == on || $value == off ]] || die "$key takes on or off"
     return
   fi
@@ -238,6 +281,11 @@ to_seconds() {
 # a password prompt (polkit dialog, screen lock) must never lose the keyboard to our start card: wait for it, at most 2 minutes
 password_prompt_up() { pgrep -x hyprlock >/dev/null 2>&1 || command hyprctl layers 2>/dev/null | grep -q 'namespace: omarchy-polkit'; }
 wait_password_prompt() { local n=0; while password_prompt_up && (( n < 120 )); do sleep 1; n=$((n + 1)); done; }
+
+HW="$(dirname "$(readlink -f "$0")")/talk-to-me-hw"
+
+# who is asking: lets "release gpu" free only your own announcement (a shared "-" when the agent has no run id)
+hw_owner() { echo "${TALK_TO_ME_OWNER:-${CODEX_THREAD_ID:-${CLAUDE_CODE_SESSION_ID:--}}}"; }
 
 new_id() { head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 
@@ -430,6 +478,96 @@ case $cmd in
 
   end)
     if [[ ${1:-} == --quiet || ${1:-} == --failed ]]; then call endquiet >/dev/null; else call end >/dev/null; fi
+    ;;
+
+  need)
+    kind=${1:-}; shift || true
+    case $kind in
+      screen) exec "$0" start "$@" ;;
+      cpu|vm|gpu) ;;
+      *) die 'usage: talk-to-me need cpu|vm|gpu "TITLE" [--estimate DUR] [--max MIN] [--wait SEC]   (a screen is: talk-to-me start)' ;;
+    esac
+    label="" estimate=0 max=$(setting_get hw-max) wait=$(setting_get hw-wait)
+    while (( $# )); do
+      case $1 in
+        --estimate) estimate=$(to_seconds "${2:?--estimate needs a duration}") || exit 1; shift 2 ;;
+        --max) max=${2:?--max needs minutes}; shift 2 ;;
+        --wait) wait=${2:?--wait needs seconds}; shift 2 ;;
+        *) label=$1; shift ;;
+      esac
+    done
+    [[ $max =~ ^[0-9]+$ && $wait =~ ^[0-9]+$ ]] || die "--max and --wait take whole numbers"
+    check_title "$label"
+    if [[ $(setting_get "hw-$kind") == off ]]; then
+      echo granted
+      echo "talk-to-me: '$kind' is not announced on this machine (setting hw-$kind is off); go ahead." >&2
+      exit 0
+    fi
+    slots=$(setting_get hw-slots)
+    queue=0; [[ $(setting_get hw-queue) == on ]] && queue=1
+    line=$("$HW" need --kind "$kind" --title "$label" --estimate "$estimate" --max "$max" --slots "$slots" --queue "$queue" --owner "$(hw_owner)" --pid $$) \
+      || die "could not record the announcement"
+    IFS=$'\t' read -r hwid state pos holders <<<"$line"
+    if [[ $state == active ]]; then
+      [[ -n $holders ]] && echo "talk-to-me: $kind is also in use by: $holders" >&2
+      echo granted
+      exit 0
+    fi
+    trap '"$HW" release --id "$hwid" >/dev/null 2>&1; exit 130' INT TERM
+    echo "talk-to-me: $kind is busy ($holders). You are number $pos in the queue; waiting up to $wait s. Do other work meanwhile." >&2
+    waited=0
+    while :; do
+      sleep 1; waited=$((waited + 1))
+      IFS=$'\t' read -r state pos <<<"$("$HW" poll "$hwid" --slots "$slots")"
+      case $state in
+        active) echo granted; exit 0 ;;
+        gone) echo cancelled; exit 4 ;;
+      esac
+      if (( waited >= wait )); then
+        "$HW" release --id "$hwid" >/dev/null 2>&1
+        echo timeout
+        echo "talk-to-me: still $kind busy after $wait s. Do other work and try again later, or run without it if the job is light." >&2
+        exit 7
+      fi
+    done
+    ;;
+
+  release)
+    what="" rid=""
+    while (( $# )); do
+      case $1 in
+        --id) rid=${2:?--id needs an id}; shift 2 ;;
+        *) what=$1; shift ;;
+      esac
+    done
+    if [[ -n $rid ]]; then "$HW" release --id "$rid" >/dev/null
+    else
+      case ${what:-all} in
+        cpu|vm|gpu) "$HW" release --kind "$what" --owner "$(hw_owner)" >/dev/null ;;
+        all) "$HW" release --all --owner "$(hw_owner)" >/dev/null ;;
+        screen) "$0" end ;;
+        *) die "usage: talk-to-me release [cpu|vm|gpu|all] [--id ID]" ;;
+      esac
+    fi
+    echo released
+    ;;
+
+  hardware|hw)
+    case ${1:-} in
+      rules)
+        cat <<RULES
+Announce with  talk-to-me need KIND "<full title>" --estimate DUR  before you start, and  talk-to-me release KIND  when done.
+  screen  your use of the person's screen, keyboard or mouse                 -> talk-to-me start (see above)
+  cpu     a job that needs more than $(setting_get hw-cpu-ram) GB RAM, or keeps $(setting_get hw-cpu-threads)+ threads busy for $(setting_get hw-minutes)+ min (big builds, encodes, test suites)
+  vm      a VM or container with more than $(setting_get hw-vm-ram) GB RAM, or any VM test run (vm-test, qemu)
+  gpu     more than $(setting_get hw-gpu-vram) GB VRAM, or load for $(setting_get hw-minutes)+ min (ComfyUI jobs, image/voice/LLM models, video encodes on the GPU)
+Queue: $(setting_get hw-queue) (hw-slots $(setting_get hw-slots) at a time).  Guard enforcement: $(setting_get hw-enforce).
+Announced kinds: cpu $(setting_get hw-cpu), vm $(setting_get hw-vm), gpu $(setting_get hw-gpu)  (off = need returns at once).
+RULES
+        ;;
+      ""|list) "$HW" list ;;
+      *) die "usage: talk-to-me hardware [rules]" ;;
+    esac
     ;;
 
   status)
