@@ -1,10 +1,10 @@
 # Background Worker Talk To Me
 
-<a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
-
 ![An agent tests on the desktop: TESTING badge with time ring top right, question card with Ctrl+Y / Ctrl+N / Ctrl+/ answers bottom right](docs/hero.gif)
 
 Omarchy shell plugin for working with AI agents. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Ctrl+Y / Ctrl+N / Ctrl+/ or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
+
+<a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
 ## What's new
 - **0.3.7 (2026-10-15):** the typed-answer box no longer uses Qt's built-in text input, which reads the clipboard by itself whenever another program changes it. It is drawn by the plugin now (`PlainField.qml`) and never touches the clipboard on its own. Typing, selecting, Enter and Ctrl+Q work as before. Ctrl+V and Shift+Insert paste through a separate `wl-paste` process (2-second deadline, size limit); middle click does not paste.
