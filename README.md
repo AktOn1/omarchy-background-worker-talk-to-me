@@ -1,4 +1,4 @@
-# Background Worker Talk To Me
+# Agent Handshake
 
 <a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
@@ -76,7 +76,7 @@ talk-to-me hardware [rules]                                                     
 ```
 Every announcement shows as a pill at the bottom right of every screen (kind, title, "in use · about 4:54 left"); it expires by itself after `hw-max` minutes. The pill never takes clicks or keys. **Queue** (`hw-queue on`): only `hw-slots` agents hold a kind at the same time, the next one waits ("waiting, number 1 in line" on its pill, `need` blocks) and gets `granted` when the holder releases; a waiter that dies is dropped, one that waits longer than `hw-wait` gets `timeout` (exit 7). **Enforced** (`hw-enforce on`): the guard hook refuses known heavy commands (`ollama run|serve`, `llama-cli`, `whisper`, ComfyUI prompts, `vm-test`, `qemu-system-*`, `virt-install`, `stress-ng`, ffmpeg with x264/x265/AV1, `make -j8` and up) until the matching kind is announced. Add your own heavy commands to `~/.config/background-worker-talk-to-me/hw-commands`, one `gpu: tool` (or `cpu:` / `vm:`) per line. Hooks only see the command text, so this catches the usual suspects, not every possible job.
 
-**The bar icon.** Add "Talk To Me" in Omarchy's bar settings (a small chip). Its tooltip lists the current holders, a click opens the panel: the screen session, the hardware list with Release (or Leave, for a waiting agent), and all settings below as switches and steppers, plus the What's new button.
+**The bar icon.** Add "Agent Handshake" in Omarchy's bar settings (a small chip). Its tooltip lists the current holders, a click opens the panel: the screen session, the hardware list with Release (or Leave, for a waiting agent), and all settings below as switches and steppers, plus the What's new button.
 
 ## Which commands are guarded
 The hook (layer 2) reads the command the agent is about to run and refuses it, with instructions, until a `talk-to-me start` session is active. It is **not** limited to one app. Built in: `wtype`, `ydotool`, `dotool`, `omarchy-restart-shell`, `hyprctl dispatch|reload|keyword`, and window launchers (`xdg-open`, `gtk-launch`, `omarchy-launch-*`, Godot without `--headless`, `play.sh`, Wine/Proton/XIVLauncher/Lutris). Reads like `hyprctl clients` and headless runs pass.
@@ -178,12 +178,12 @@ While it runs: at the first countdown the card shows "Faster with your help: ...
 ### One feature at a time
 | Feature | Paste this |
 |---|---|
-| Whole flow | `Test the Background Worker Talk To Me plugin: talk-to-me start "Demo of the Background Worker Talk To Me plugin for my own try-out" --help "watch and answer my questions", then move this terminal to workspace 3 and ask me with talk-to-me ask whether I saw it, then ask me an open question with --text what I see, then talk-to-me end.` |
+| Whole flow | `Test the Agent Handshake plugin: talk-to-me start "Demo of the Agent Handshake plugin for my own try-out" --help "watch and answer my questions", then move this terminal to workspace 3 and ask me with talk-to-me ask whether I saw it, then ask me an open question with --text what I see, then talk-to-me end.` |
 | Hands-off guard (no mention of talk-to-me) | `Move this terminal to workspace 3, make it float, then put it back.` Expect: a block message, then the countdown and the TESTING banner. |
-| Open question | `Run talk-to-me start "Demo of the Background Worker Talk To Me plugin for my own try-out", then talk-to-me ask "What do you see on screen?" --text, repeat my answer back to me, then talk-to-me end.` |
-| Postpone | `Run talk-to-me start "Demo of the Background Worker Talk To Me plugin for my own try-out". If I postpone, wait that long and start again. Then ask me one yes/no question with talk-to-me ask and talk-to-me end.` Press **Ctrl+P** and a number of minutes. |
-| Ask for help | `Run talk-to-me start "Demo of the Background Worker Talk To Me plugin for my own try-out" --help "tell me whether the terminal moved", move this terminal to workspace 3 and back, ask me after each move, then talk-to-me end.` Press **Ctrl+Y** on the countdown: the card shows the help request and the questions follow. |
-| Cancel | `Run talk-to-me start "Demo of the Background Worker Talk To Me plugin for my own try-out" and tell me what it printed.` Press **Ctrl+Q**; the agent should say `cancelled` and touch nothing. |
+| Open question | `Run talk-to-me start "Demo of the Agent Handshake plugin for my own try-out", then talk-to-me ask "What do you see on screen?" --text, repeat my answer back to me, then talk-to-me end.` |
+| Postpone | `Run talk-to-me start "Demo of the Agent Handshake plugin for my own try-out". If I postpone, wait that long and start again. Then ask me one yes/no question with talk-to-me ask and talk-to-me end.` Press **Ctrl+P** and a number of minutes. |
+| Ask for help | `Run talk-to-me start "Demo of the Agent Handshake plugin for my own try-out" --help "tell me whether the terminal moved", move this terminal to workspace 3 and back, ask me after each move, then talk-to-me end.` Press **Ctrl+Y** on the countdown: the card shows the help request and the questions follow. |
+| Cancel | `Run talk-to-me start "Demo of the Agent Handshake plugin for my own try-out" and tell me what it printed.` Press **Ctrl+Q**; the agent should say `cancelled` and touch nothing. |
 | Question without a test (experimental) | First `talk-to-me settings set questions on` and restart the shell once. Then: `Use talk-to-me question to ask me whether to continue, A or B, and do what I answer. Do not run talk-to-me start.` |
 
 Tips while testing: tap **Ctrl alone** to freeze a timer, **Ctrl+T** types a reply, **Ctrl+Q** stops. `talk-to-me status` shows the current state.

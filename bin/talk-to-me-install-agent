@@ -1,5 +1,5 @@
 #!/bin/bash
-# talk-to-me-install-agent: opt-in setup of the agent side of Background Worker Talk To Me. Nothing here runs by itself.
+# talk-to-me-install-agent: opt-in setup of the agent side of Agent Handshake. Nothing here runs by itself.
 set -euo pipefail
 root=$(dirname "$(dirname "$(readlink -f "$0")")")
 bindir=${TALK_TO_ME_BIN_DIR:-$HOME/.local/bin}

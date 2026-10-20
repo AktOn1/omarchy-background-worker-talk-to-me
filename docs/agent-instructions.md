@@ -1,13 +1,13 @@
 # Agent instructions snippet
 
-Paste the block below into your `AGENTS.md` or `CLAUDE.md` (global or per project) if you want your coding agents to use Background Worker Talk To Me. Opt-in only: the plugin never edits these files itself.
+Paste the block below into your `AGENTS.md` or `CLAUDE.md` (global or per project) if you want your coding agents to use Agent Handshake. Opt-in only: the plugin never edits these files itself.
 
 For Claude Code there is also a ready-made skill, see [skill/background-worker-talk-to-me/SKILL.md](skill/background-worker-talk-to-me/SKILL.md).
 
 ---
 
 ```markdown
-## Announce the hardware you need (Background Worker Talk To Me)
+## Announce the hardware you need (Agent Handshake)
 
 Whenever you are about to use something the human feels, say so first, so they see it as a pill on their screen and can wait, queue or stop you:
 - the **screen, keyboard or mouse**: `talk-to-me start "<full title>" --estimate 3m` (see below);
@@ -16,7 +16,7 @@ Whenever you are about to use something the human feels, say so first, so they s
 - **heavy GPU use** (more than 2 GB VRAM, or load for 2+ minutes: image, voice or LLM models, GPU video encodes): `talk-to-me need gpu "<what and why>" --estimate 10m`.
 `need` prints `granted` when you may go ahead. If the human turned the queue on and someone else holds that resource it waits in line and prints `granted` when it is your turn (or `timeout`, exit 7, or `cancelled`, exit 4: do other work and retry later). Run the heavy command only after `granted`, and release it when done: `talk-to-me release cpu|vm|gpu` (it also expires by itself after the longest hold, 60 minutes by default). `talk-to-me hardware` shows who holds what and the current thresholds. The title is shown in full, like the session title: who you are, what exactly, why.
 
-## Desktop testing with human feedback (Background Worker Talk To Me)
+## Desktop testing with human feedback (Agent Handshake)
 
 Before anything else, check whether the test can run in a virtual machine (or a nested compositor) instead of on the human's real desktop. If it does not need their real logins, GPU or monitors, run it there: no session, no banner, no risk. Only start a session for what truly needs the real desktop.
 

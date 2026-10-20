@@ -1,5 +1,5 @@
 #!/bin/bash
-# talk-to-me: command line for the Background Worker Talk To Me Omarchy shell plugin.
+# talk-to-me: command line for the Agent Handshake Omarchy shell plugin.
 # Usage: talk-to-me start TITLE [--help TEXT] [--estimate DUR] [--work] [--countdown SEC] [--max MIN] [--no-shield] [--no-hide]   -> human | solo | cancelled | postpone:<min>
 #        talk-to-me ask "QUESTION" [--text] [--timeout SEC]       -> yes | no | unsure | text:<typed> | postpone:<min> | timeout | ended
 #        talk-to-me question "QUESTION" [--text] [--timeout SEC]  (experimental, off by default)
@@ -16,7 +16,7 @@ set -u
 
 usage() {
   cat <<'USAGE'
-talk-to-me: Background Worker Talk To Me
+talk-to-me: Agent Handshake
 
   talk-to-me start [LABEL] [--help TEXT] [--estimate DUR] [--work] [--countdown SEC] [--max MIN] [--no-shield] [--no-hide]
       TITLE (required): one full sentence the person reads on the card and banner, never cut off (max 240 characters):
@@ -580,7 +580,7 @@ RULES
     state=$("$0" status 2>/dev/null) || exit 0
     [[ $state == *'"phase":"active"'* ]] && exit 0
     cat >&2 <<MSG
-Blocked: ${1:-this} opens a window on the user's live desktop and no Background Worker Talk To Me session is active.
+Blocked: ${1:-this} opens a window on the user's live desktop and no Agent Handshake session is active.
 FIRST: can this run in a VM or a nested compositor instead? If it does not need the user's real logins, GPU or monitors, test there and no session is needed.
 Run:  talk-to-me start "<your name>: <what you will do>" [--work if you are not testing] --help "watch the screen and answer Ctrl+Y / Ctrl+N after each change"
 (10 s countdown + TESTING banner, so the user keeps mouse and keyboard to themselves). Then repeat this command,

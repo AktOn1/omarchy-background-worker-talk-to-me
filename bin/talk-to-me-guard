@@ -40,7 +40,7 @@ if (( touches && in_agent )) && [[ -z ${TALK_TO_ME_GUARD_OFF:-} && -z ${TALK_TO_
   # plugin not running (status fails): nothing to ask, so let the command through instead of deadlocking
   if state=$("$(dirname "$self")/talk-to-me" status 2>/dev/null) && [[ $state != *'"phase":"active"'* ]]; then
     cat >&2 <<MSG
-$name blocked: this touches the user's live desktop and no Background Worker Talk To Me session is active.
+$name blocked: this touches the user's live desktop and no Agent Handshake session is active.
 Run:  talk-to-me start "<your name>: <exactly what you test or do, and for which project or reason>"   (10 s countdown + TESTING banner; the title is shown in full, 5+ words, max 240 characters)
 Not testing (restarting the shell, reloading Hyprland)? Add --work: the screens then say WORKING instead of TESTING.
 Then repeat this command, and finish with:  talk-to-me end

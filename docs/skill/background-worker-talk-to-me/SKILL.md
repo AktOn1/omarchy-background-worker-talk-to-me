@@ -9,9 +9,9 @@ description: >
   window moves, workspace switch, bar change, Hyprland rule test, talk-to-me need, announce hardware, GPU, VM.
 ---
 
-# Background Worker Talk To Me
+# Agent Handshake
 
-Background Worker Talk To Me (plugin `io.github.akton1.background-worker-talk-to-me`) shows a TESTING banner on the
+Agent Handshake (plugin `io.github.akton1.background-worker-talk-to-me`) shows a TESTING banner on the
 desktop and lets you ask the human a yes/no question that they answer with Ctrl+Y / Ctrl+N / Ctrl+/ , or a free-text question they answer in a textbox.
 
 ## Check first

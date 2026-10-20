@@ -5,7 +5,7 @@ import qs.Commons
 import qs.Ui
 import "TalkToMeModel.js" as Model
 
-// The bar icon of Background Worker Talk To Me: a small chip. It shows who is using the screen, the CPU/RAM, a VM or the GPU right now
+// The bar icon of Agent Handshake: a small chip. It shows who is using the screen, the CPU/RAM, a VM or the GPU right now
 // (and who waits in line), lets you release an entry, and holds every setting of the plugin. Hardware state is read from
 // $XDG_RUNTIME_DIR/talk-to-me/hw/state.json (written by bin/talk-to-me-hw); settings go through `talk-to-me settings [set KEY VALUE]`.
 BarWidget {
@@ -138,8 +138,8 @@ BarWidget {
     bar: root.bar
     active: root.pills.length > 0 || root.popupOpen
     tooltipText: {
-      if (root.pills.length === 0) return "Talk To Me\nno hardware announced\nclick: settings and queue"
-      return "Talk To Me\n" + root.pills.map(function(p) {
+      if (root.pills.length === 0) return "Agent Handshake\nno hardware announced\nclick: settings and queue"
+      return "Agent Handshake\n" + root.pills.map(function(p) {
         return p.label + (p.queued ? " (waiting #" + p.position + ")" : "") + ": " + p.title
       }).join("\n") + "\nclick: settings and queue"
     }
@@ -214,7 +214,7 @@ BarWidget {
             anchors.left: parent.left
             anchors.leftMargin: Style.space(6)
             anchors.verticalCenter: parent.verticalCenter
-            text: "Talk To Me"
+            text: "Agent Handshake"
             color: root.fg
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.subtitle

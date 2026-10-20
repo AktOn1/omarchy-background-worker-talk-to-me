@@ -1,4 +1,4 @@
-// Background Worker Talk To Me: service. Shows a TESTING banner while a script or agent changes the
+// Agent Handshake: service. Shows a TESTING banner while a script or agent changes the
 // desktop, a countdown at the start, and a one-key question card on request.
 //
 // The start countdown is a top bar, questions a card in the bottom-right corner, the TESTING banner a badge with a time ring in the

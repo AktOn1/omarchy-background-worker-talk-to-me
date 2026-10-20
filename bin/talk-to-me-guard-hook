@@ -84,7 +84,7 @@ if tool in ASK_TOOLS:
     if st.get("phase") != "active":
         sys.exit(0)
     sys.stderr.write(
-        "Blocked: a Background Worker Talk To Me session is active, so ask the user on screen, not in this terminal.\n"
+        "Blocked: a Agent Handshake session is active, so ask the user on screen, not in this terminal.\n"
         'Yes/no/unsure: talk-to-me ask "Did the window move?"    Open question (he types): talk-to-me ask "What do you see?" --text\n'
         + ("Mode is solo (nobody offered help), so talk-to-me ask would print timeout. Run talk-to-me end, then restart with a help offer:\n"
            '  talk-to-me start "<name>: <what, for which project or reason>" --help "watch the screen and answer Ctrl+Y / Ctrl+N after each change"\n'
@@ -178,7 +178,7 @@ if state.get("phase") == "active":
     sys.exit(0)
 
 sys.stderr.write(
-    "Blocked: this command touches the user's live desktop and no Background Worker Talk To Me session is active.\n"
+    "Blocked: this command touches the user's live desktop and no Agent Handshake session is active.\n"
     "FIRST: can this run in a VM or a nested compositor instead? If it does not need the user's real logins, GPU or monitors, test there and no session is needed.\n"
     'Run:  talk-to-me start "<your name>: <exactly what you test or do, and for which project or reason>" --help "watch the screen and answer Ctrl+Y / Ctrl+N after each change"\n'
     "(10 s countdown + TESTING banner; --help adds a Ctrl+Y key so the user can offer to answer your questions. Drop --help only for hands-off work with no visual questions.)\n"
