@@ -1,10 +1,10 @@
 # Agent Handshake
 
-<a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
-
 ![An agent tests on the desktop: TESTING badge with time ring top right, question card with Ctrl+Y / Ctrl+N / Ctrl+/ answers bottom right](docs/hero.gif)
 
 Omarchy shell plugin for working with AI agents. An agent tells you when it needs the hardware you also feel: your screen, keyboard and mouse, a heavy CPU/RAM job, a VM with lots of resources, the GPU. Before an agent tests on your desktop (moving windows, workspaces, the bar, animations, opening apps) it tells you with a countdown and a TESTING badge, so your clicks do not spoil its test and its test does not spoil your work. While it runs it can ask you quick questions (Ctrl+Y / Ctrl+N / Ctrl+/ or a typed reply) instead of slow screenshot loops. Works with any agent: Claude Code, Codex, Gemini CLI, OpenCode and others.
+
+<a href='https://ko-fi.com/akton1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
 ## What's new
 - **0.4.0 (2026-10-18):** agents announce the hardware they need. `talk-to-me need cpu|vm|gpu "<what and why>" --estimate 10m` before a heavy CPU/RAM job, a VM with lots of resources or heavy GPU use, `talk-to-me release ...` after; a pill at the bottom right of every screen shows who uses what and for how long. The screen, keyboard and mouse stay `talk-to-me start`. New bar icon (a small chip) with the current holders, a Release button per entry and every setting of the plugin. Optional queue (`hw-queue`): the next agent waits in line instead of sharing the resource. Optional enforcement (`hw-enforce`): the guard hook blocks known heavy commands (`ollama run`, `vm-test`, `stress-ng`, big encodes) until they are announced.
